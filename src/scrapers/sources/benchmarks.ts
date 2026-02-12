@@ -7,12 +7,23 @@
  * - Provider announcements - Official benchmark claims
  */
 
-import Exa from 'exa-js';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import type { ScrapedBenchmark, ScrapeResult } from '../types.js';
 
-const exa = new Exa(process.env.EXA_API_KEY);
 const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY });
+
+// Exa is optional — only used by searchOfficialBenchmarks()
+let exa: any;
+async function getExa() {
+  if (!exa) {
+    if (!process.env.EXA_API_KEY) {
+      throw new Error('EXA_API_KEY is required for searchOfficialBenchmarks');
+    }
+    const { default: Exa } = await import('exa-js');
+    exa = new Exa(process.env.EXA_API_KEY);
+  }
+  return exa;
+}
 
 // Known benchmark sources
 export const benchmarkSources = {
@@ -260,7 +271,8 @@ export async function searchOfficialBenchmarks(
 
   try {
     // Search for official benchmark announcements
-    const results = await exa.searchAndContents(
+    const exaClient = await getExa();
+    const results = await exaClient.searchAndContents(
       `${provider} ${modelName} benchmark MMLU HumanEval GPQA official`,
       {
         type: 'auto',
