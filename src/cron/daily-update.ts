@@ -7,12 +7,12 @@
  *
  * Requires TURSO_WRITE_TOKEN env var for database writes.
  *
- * Updates:
- * 1. GitHub issues (known bugs)
- * 2. Pricing (for stale providers)
- * 3. AI benchmarks (weekly)
- * 4. API discovery (weekly, Wednesdays)
- * 5. Metadata refresh (daily, up to 3 providers)
+ * Updates (runs every other day):
+ * 1. GitHub issues (known bugs) — every run
+ * 2. Pricing (stale providers) — up to 3/run
+ * 3. AI benchmarks — Mondays only
+ * 4. API discovery — 1st and 15th only
+ * 5. Metadata refresh — up to 2/run
  */
 
 import {
@@ -115,8 +115,8 @@ async function updateStalePricing(): Promise<UpdateResult> {
     const staleProviders = await getStaleProviders(7);
     console.log(`  Found ${staleProviders.length} providers with stale pricing`);
 
-    // Scrape up to 5 stale providers per run to stay within rate limits
-    for (const provider of staleProviders.slice(0, 5)) {
+    // Scrape up to 3 stale providers per run to stay within free tier
+    for (const provider of staleProviders.slice(0, 3)) {
       console.log(`    Scraping ${provider.id}...`);
       try {
         const pricingUrl = pricingUrlMap.get(provider.id);
@@ -212,10 +212,10 @@ async function updateAiBenchmarks(): Promise<UpdateResult> {
 async function runDiscovery(): Promise<UpdateResult> {
   const start = Date.now();
 
-  // Only run on Wednesdays (weekly)
-  const today = new Date().getDay();
-  if (today !== 3) {
-    console.log('  Skipping: only runs on Wednesdays');
+  // Only run on 1st and 15th of the month (biweekly)
+  const dayOfMonth = new Date().getDate();
+  if (dayOfMonth !== 1 && dayOfMonth !== 15) {
+    console.log('  Skipping: only runs on 1st and 15th');
     return { task: 'discovery', success: true, count: 0, duration: 0 };
   }
 
@@ -260,8 +260,8 @@ async function refreshStaleMetadata(): Promise<UpdateResult> {
       return { task: 'metadata_refresh', success: true, count: 0, duration: Date.now() - start };
     }
 
-    console.log(`  Found ${withWebsites.length} stale providers, refreshing up to 3...`);
-    const results = await refreshStaleProviderMetadata(withWebsites, 3);
+    console.log(`  Found ${withWebsites.length} stale providers, refreshing up to 2...`);
+    const results = await refreshStaleProviderMetadata(withWebsites, 2);
     const updated = results.filter(r => r.fieldsUpdated.length > 0).length;
 
     return { task: 'metadata_refresh', success: true, count: updated, duration: Date.now() - start };
