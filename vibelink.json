@@ -1,0 +1,37 @@
+{
+  "name": "API Broker",
+  "description": "Personal API shopper - an intelligent MCP server that recommends the best APIs for your project based on your stack, constraints, and past experiences",
+  "author": "Alex Stein",
+  "projectId": "koacvxrdeo72",
+  "technologies": ["TypeScript", "Node.js", "MCP SDK", "SQLite", "Firecrawl", "Exa"],
+  "onboarding": {
+    "title": "Welcome to API Broker!",
+    "steps": [
+      "Run `npm install` to install dependencies",
+      "Copy `.env.example` to `.env` and add your API keys",
+      "Run `npm run db:seed` to initialize the database with provider data",
+      "Run `npm run build` to compile TypeScript",
+      "Add the MCP server to your Claude Code config (see .mcp.json for example)"
+    ],
+    "requirements": [
+      {
+        "name": "Firecrawl API Key",
+        "description": "Required for scraping pricing pages and documentation. Get one at firecrawl.dev",
+        "envVar": "FIRECRAWL_API_KEY",
+        "required": true
+      },
+      {
+        "name": "GitHub Token",
+        "description": "Optional but recommended for higher rate limits when fetching GitHub issues/releases",
+        "envVar": "GITHUB_TOKEN",
+        "required": false
+      },
+      {
+        "name": "Exa API Key",
+        "description": "Optional - only needed for the API discovery feature",
+        "envVar": "EXA_API_KEY",
+        "required": false
+      }
+    ]
+  }
+}

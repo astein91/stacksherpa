@@ -1,0 +1,47 @@
+{
+  "name": "stacksherpa",
+  "version": "1.0.0",
+  "description": "Intelligent API recommendation engine — silently picks the best APIs for your stack",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "stacksherpa": "dist/server.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "test": "node --import tsx --test src/*.test.ts",
+    "prepublishOnly": "tsc",
+
+    "seed:turso": "tsx src/db/seed-turso.ts",
+
+    "cron:daily": "tsx src/cron/daily-update.ts",
+
+    "freshness": "tsx src/scrapers/jobs/check-freshness.ts",
+    "issues": "tsx src/scrapers/sources/github-issues.ts",
+    "issues:all": "tsx -e \"import { updateAllProviderIssues } from './src/scrapers/sources/github-issues.js'; updateAllProviderIssues().then(r => console.log('Done:', r.size, 'providers'))\"",
+    "discover": "tsx src/scrapers/sources/discovery.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "@mendable/firecrawl-js": "^1.0.0",
+    "exa-js": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

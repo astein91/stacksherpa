@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "stacksherpa": {
+      "command": "npx",
+      "args": ["-y", "stacksherpa"]
+    }
+  }
+}
