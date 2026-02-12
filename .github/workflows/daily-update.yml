@@ -1,4 +1,4 @@
-name: Daily Database Update
+name: Daily Catalog Update
 
 on:
   schedule:
@@ -23,36 +23,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Create data directory
-        run: mkdir -p data
-
-      - name: Download existing database
-        uses: actions/download-artifact@v4
-        with:
-          name: api-broker-db
-          path: data/
-        continue-on-error: true  # OK if doesn't exist yet
-
       - name: Run daily update
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
-          API_BROKER_DB: ./data/api-broker.db
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_WRITE_TOKEN: ${{ secrets.TURSO_WRITE_TOKEN }}
         run: npm run cron:daily
-
-      - name: Upload updated database
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-broker-db
-          path: data/api-broker.db
-          retention-days: 90
-
-      - name: Commit database changes (optional)
-        if: github.event_name == 'schedule'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add data/api-broker.db
-          git diff --staged --quiet || git commit -m "chore: daily database update [skip ci]"
-          git push
-        continue-on-error: true

@@ -5,13 +5,15 @@
  * Run via: npm run cron:daily
  * Or via GitHub Actions on a schedule
  *
+ * Requires TURSO_WRITE_TOKEN env var for database writes.
+ *
  * Updates:
  * 1. GitHub issues (known bugs)
  * 2. Pricing (for stale providers)
  * 3. AI benchmarks (weekly)
  */
 
-import { getDb, closeDb, upsertKnownIssue, getStaleProviders } from '../db/client.js';
+import { upsertKnownIssue, getStaleProviders } from '../db/client.js';
 import { getProviderIssues, providerRepos } from '../scrapers/sources/github-issues.js';
 // import { scrapePricing } from '../scrapers/sources/pricing.js';
 // import { scrapeArtificialAnalysis } from '../scrapers/sources/benchmarks.js';
@@ -29,8 +31,6 @@ async function updateGitHubIssues(): Promise<UpdateResult> {
   let totalIssues = 0;
 
   try {
-    const db = getDb();
-
     for (const providerId of Object.keys(providerRepos)) {
       console.log(`  Fetching issues for ${providerId}...`);
 
@@ -41,7 +41,7 @@ async function updateGitHubIssues(): Promise<UpdateResult> {
         });
 
         for (const issue of issues) {
-          upsertKnownIssue(providerId, issue);
+          await upsertKnownIssue(providerId, issue);
           totalIssues++;
         }
 
@@ -74,7 +74,7 @@ async function updateStalePricing(): Promise<UpdateResult> {
   const start = Date.now();
 
   try {
-    const staleProviders = getStaleProviders(7);  // Pricing older than 7 days
+    const staleProviders = await getStaleProviders(7);
     console.log(`  Found ${staleProviders.length} providers with stale pricing`);
 
     // TODO: Implement Firecrawl pricing scraping
@@ -141,7 +141,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function main() {
-  console.log('=== API Broker Daily Update ===');
+  // Verify write token is available
+  if (!process.env.TURSO_WRITE_TOKEN) {
+    console.error('Error: TURSO_WRITE_TOKEN is required for daily updates');
+    process.exit(1);
+  }
+
+  console.log('=== stacksherpa Daily Update ===');
   console.log(`Started at: ${new Date().toISOString()}\n`);
 
   const results: UpdateResult[] = [];
@@ -158,13 +164,10 @@ async function main() {
   console.log('\n3. AI benchmarks...');
   results.push(await updateAiBenchmarks());
 
-  // Close DB
-  closeDb();
-
   // Summary
   console.log('\n=== Summary ===');
   for (const result of results) {
-    const status = result.success ? '✅' : '❌';
+    const status = result.success ? 'OK' : 'FAIL';
     const count = result.count !== undefined ? ` (${result.count} items)` : '';
     const duration = `${(result.duration / 1000).toFixed(1)}s`;
     console.log(`${status} ${result.task}${count} - ${duration}`);
@@ -175,11 +178,11 @@ async function main() {
 
   const failed = results.filter(r => !r.success);
   if (failed.length > 0) {
-    console.log(`\n❌ ${failed.length} task(s) failed`);
+    console.log(`\n${failed.length} task(s) failed`);
     process.exit(1);
   }
 
-  console.log('\n✅ All tasks completed');
+  console.log('\nAll tasks completed');
 }
 
 main().catch(err => {
