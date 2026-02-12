@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 /**
- * API Broker MCP Server (v2)
+ * API Broker MCP Server (v3)
  *
- * Features:
- * - Profile-aware recommendations with confidence + gaps
- * - Global taste computed from decisions across projects
- * - Surgical profile updates with audit trail
- * - Auto-registration of projects
+ * Pure data provider — returns all providers, profile, and history.
+ * Claude (the host LLM) handles analysis and provider selection.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -19,10 +16,9 @@ import { basename } from 'path';
 
 // Database
 import {
-  getProvidersByCategory,
+  getProvidersByCategoryEnriched,
   getProviderById,
   getCategories,
-  getProviderEcosystems,
 } from './db/client.js';
 
 // Profile management
@@ -37,19 +33,11 @@ import {
 import {
   recordDecision as recordLocalDecision,
   getDecisionsByCategory,
+  getDecisionsByApi,
   getAllExperienceSummaries,
   getDecision,
   updateDecision,
 } from './decisions.js';
-
-// Patterns
-import {
-  computePatterns,
-  filterPatternsForCategory,
-  filterExperiencesForCategory,
-  describePattern,
-  invalidatePatternCache,
-} from './patterns.js';
 
 // Projects
 import {
@@ -60,24 +48,14 @@ import {
   ensureProjectRegistered,
 } from './projects.js';
 
-// Scoring
-import { scoreProvider, type EcosystemContext } from './scoring.js';
-
 // Types
-import type {
-  KnownProvider,
-  EffectiveProfile,
-  Gap,
-  ExperienceSummary,
-  ScoredPattern,
-} from './types.js';
-import { categoryAliases } from './knowledge.js';
-import { randomUUID } from 'crypto';
+import type { Gap } from './types.js';
+import { categoryAliases } from './categories.js';
 
 const server = new Server(
   {
     name: 'stacksherpa',
-    version: '2.0.0',
+    version: '3.0.0',
   },
   {
     capabilities: {
@@ -94,164 +72,6 @@ function normalizeCategory(category: string): string {
 }
 
 // ============================================
-// Recommendation
-// ============================================
-
-interface RecommendResult {
-  provider: string;
-  package?: string;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-  alternatives?: Array<{ provider: string; tradeoff: string }>;
-  gaps?: Gap[];
-  context?: {
-    relevantExperiences: ExperienceSummary[];
-    appliedPatterns: Array<{ signal: string; confidence: number }>;
-  };
-  decisionId?: string;
-  catalogVersion: string;
-}
-
-async function recommend(category: string): Promise<RecommendResult> {
-  const normalized = normalizeCategory(category);
-
-  // Load effective profile
-  const { effective } = await loadEffectiveProfile(projectDir);
-
-  // Load taste (computed from all projects)
-  const taste = await computePatterns();
-  const categoryExperiences = filterExperiencesForCategory(taste.experiences, normalized);
-  const categoryPatterns = filterPatternsForCategory(taste.patterns, normalized);
-
-  // Get providers from database
-  const providers = await getProvidersByCategory(normalized);
-
-  if (!providers || providers.length === 0) {
-    return {
-      provider: 'unknown',
-      confidence: 'low',
-      reason: `No providers found for "${category}". Research needed.`,
-      catalogVersion: '0.0.0',
-    };
-  }
-
-  // Build ecosystem context from ALL positive experiences (not just this category)
-  const providerEcosystems = await getProviderEcosystems();
-  const usedEcosystems = new Set<string>();
-
-  for (const exp of taste.experiences) {
-    if (exp.outcome === 'positive') {
-      const ecosystem = providerEcosystems.get(exp.api.toLowerCase());
-      if (ecosystem) {
-        usedEcosystems.add(ecosystem);
-      }
-    }
-  }
-
-  const ecosystemCtx: EcosystemContext = { usedEcosystems };
-
-  // Build avoid list from preferences + negative experiences
-  const avoidList = [
-    ...(effective.preferences?.avoidProviders ?? []),
-  ].map(s => s.toLowerCase());
-
-  // Score and rank providers
-  const scored = providers
-    .filter(p => !avoidList.includes(p.name.toLowerCase()))
-    .map(p => ({
-      provider: p,
-      score: scoreProvider(p, effective, categoryExperiences, categoryPatterns, ecosystemCtx),
-    }))
-    .filter(p => p.score >= 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (scored.length === 0) {
-    return {
-      provider: 'none',
-      confidence: 'low',
-      reason: 'All providers filtered out by constraints.',
-      catalogVersion: '0.0.0',
-    };
-  }
-
-  const top = scored[0];
-
-  // Build alternatives with tradeoffs
-  const alternatives = scored.slice(1, 4).map(s => {
-    const tradeoffs: string[] = [];
-    if (s.provider.pricing?.freeTier && !top.provider.pricing?.freeTier) {
-      tradeoffs.push('has free tier');
-    }
-    if (s.provider.strengths?.includes('dx') && !top.provider.strengths?.includes('dx')) {
-      tradeoffs.push('better DX');
-    }
-    if (s.provider.selfHostable && !top.provider.selfHostable) {
-      tradeoffs.push('self-hostable');
-    }
-    return {
-      provider: s.provider.name,
-      tradeoff: tradeoffs.length > 0 ? tradeoffs.join(', ') : 'lower score',
-    };
-  });
-
-  // Build reason
-  const reasons: string[] = [];
-  if (effective.project?.scale) {
-    reasons.push(`Best match for ${effective.project.scale} scale`);
-  }
-  if (top.provider.strengths?.length) {
-    reasons.push(`Strong on ${top.provider.strengths.slice(0, 2).join(', ')}`);
-  }
-
-  // Add ecosystem affinity context
-  if (top.provider.ecosystem && usedEcosystems.has(top.provider.ecosystem)) {
-    reasons.push(`Same ecosystem as other services you're using (${top.provider.ecosystem})`);
-  }
-
-  // Add experience-based context
-  const positiveExps = categoryExperiences.filter(
-    e => e.api.toLowerCase() === top.provider.name.toLowerCase() && e.outcome === 'positive'
-  );
-  const negativeExps = categoryExperiences.filter(
-    e => e.api.toLowerCase() !== top.provider.name.toLowerCase() && e.outcome === 'negative'
-  );
-  if (positiveExps.length > 0) {
-    reasons.push(`You had good experiences with this before`);
-  }
-  if (negativeExps.length > 0) {
-    reasons.push(`Avoiding ${negativeExps.map(e => e.api).join(', ')} based on past issues`);
-  }
-
-  // Calculate confidence
-  const gaps = detectGaps(effective, normalized);
-  const highImpactGaps = gaps.filter(g => g.impact === 'high');
-  const confidence: 'high' | 'medium' | 'low' =
-    top.score >= 30 && highImpactGaps.length === 0 ? 'high' :
-    top.score >= 15 && highImpactGaps.length <= 1 ? 'medium' :
-    'low';
-
-  const decisionId = randomUUID();
-
-  return {
-    provider: top.provider.name,
-    package: top.provider.package,
-    confidence,
-    reason: reasons.join('. ') + '.',
-    alternatives: alternatives.length > 0 ? alternatives : undefined,
-    gaps: gaps.length > 0 ? gaps : undefined,
-    context: {
-      relevantExperiences: categoryExperiences.slice(0, 5),
-      appliedPatterns: categoryPatterns.slice(0, 5).map(p => ({
-        signal: p.signal,
-        confidence: p.confidence,
-      })),
-    },
-    decisionId,
-    catalogVersion: '2.0.0',
-  };
-}
-
-// ============================================
 // Tool Definitions
 // ============================================
 
@@ -259,9 +79,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: 'recommend',
+        name: 'get_providers',
         description:
-          'Get an instant API recommendation for a category. Returns the best provider based on project profile, constraints, and cross-project taste history. Includes confidence level and gaps that would improve the recommendation.',
+          'Get all providers for a category with pricing, issues, benchmarks, plus the project profile and past decisions. Returns everything needed to pick the best provider.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -276,7 +96,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_profile',
         description:
-          'Get the current API preference profile for this project. Shows effective profile (merged global + local), global defaults, local overrides, computed taste from all projects, and merge details.',
+          'Get the current API preference profile for this project. Shows effective profile (merged global + local), global defaults, local overrides, and past decisions.',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -393,21 +213,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: 'get_search_strategy',
-        description:
-          'Get search queries and focus areas for researching an API need. Tailored to the project profile.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            need: {
-              type: 'string',
-              description: 'The API capability needed (e.g., "transactional email", "payment gateway")',
-            },
-          },
-          required: ['need'],
-        },
-      },
-      {
         name: 'report_outcome',
         description:
           'Report the outcome of using a recommended API. Updates the local decision record.',
@@ -447,14 +252,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   // ==================
-  // recommend
+  // get_providers
   // ==================
-  if (name === 'recommend') {
+  if (name === 'get_providers') {
     const { category } = args as { category: string };
-    const result = await recommend(category);
+    const normalized = normalizeCategory(category);
+
+    // Load everything in parallel
+    const [providers, profileResult, pastDecisions] = await Promise.all([
+      getProvidersByCategoryEnriched(normalized),
+      loadEffectiveProfile(projectDir),
+      getDecisionsByCategory(normalized),
+    ]);
+
+    const { effective } = profileResult;
+    const gaps: Gap[] = detectGaps(effective, normalized);
 
     return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          category: normalized,
+          providers,
+          profile: {
+            summary: summarizeProfile(effective),
+            effective,
+            gaps: gaps.length > 0 ? gaps : undefined,
+          },
+          pastDecisions: pastDecisions.length > 0 ? pastDecisions : undefined,
+        }, null, 2),
+      }],
     };
   }
 
@@ -462,26 +289,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // get_profile
   // ==================
   if (name === 'get_profile') {
+    const [profileResult, experiences] = await Promise.all([
+      loadEffectiveProfile(projectDir),
+      getAllExperienceSummaries(),
+    ]);
+
     const {
       effective,
       globalDefaults,
       localProfile,
       mergeDetails,
-    } = await loadEffectiveProfile(projectDir);
-
-    // Get taste summary
-    const taste = await computePatterns();
-    const tasteSummary = {
-      experienceCount: taste.experiences.length,
-      recentExperiences: taste.experiences.slice(0, 10),
-      topPatterns: taste.patterns
-        .filter(p => p.confidence > 0.3)
-        .slice(0, 10)
-        .map(p => ({
-          ...p,
-          description: describePattern(p),
-        })),
-    };
+    } = profileResult;
 
     return {
       content: [{
@@ -492,7 +310,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           globalDefaults,
           localProfile,
           mergeDetails,
-          taste: tasteSummary,
+          recentDecisions: experiences.slice(0, 20),
           projectDir,
         }, null, 2),
       }],
@@ -542,28 +360,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       notesPrivate,
     });
 
-    // Invalidate cache and recompute patterns to show any new inferences
-    invalidatePatternCache();
-    const taste = await computePatterns();
-    const newPatterns = taste.patterns
-      .filter(p =>
-        p.signal.toLowerCase().includes(api.toLowerCase()) ||
-        p.signal.includes(`:${category.toLowerCase()}`)
-      )
-      .slice(0, 3);
-
     return {
       content: [{
         type: 'text',
         text: JSON.stringify({
           recorded: true,
           decisionId: decision.id,
-          addedToProject: true,
-          newPatterns: newPatterns.map(p => ({
-            signal: p.signal,
-            confidence: p.confidence,
-            description: describePattern(p),
-          })),
         }, null, 2),
       }],
     };
@@ -582,18 +384,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // Also get any experiences with this provider
-    const taste = await computePatterns();
-    const providerExperiences = taste.experiences.filter(
-      e => e.api.toLowerCase() === provider.name.toLowerCase()
-    );
+    // Get past decisions for this provider
+    const providerDecisions = await getDecisionsByApi(provider.name);
 
     return {
       content: [{
         type: 'text',
         text: JSON.stringify({
           provider,
-          userExperiences: providerExperiences,
+          pastDecisions: providerDecisions.length > 0 ? providerDecisions : undefined,
         }, null, 2),
       }],
     };
@@ -669,68 +468,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   // ==================
-  // get_search_strategy
-  // ==================
-  if (name === 'get_search_strategy') {
-    const { need } = args as { need: string };
-    const { effective } = await loadEffectiveProfile(projectDir);
-    const summary = summarizeProfile(effective);
-
-    // Build tailored search queries
-    const queries: string[] = [];
-    const focusAreas: string[] = [];
-
-    // Base query
-    queries.push(`best ${need} API ${new Date().getFullYear()}`);
-
-    // Compliance-specific
-    if (effective.constraints?.compliance?.length) {
-      for (const comp of effective.constraints.compliance) {
-        queries.push(`${need} API ${comp} compliant`);
-      }
-      focusAreas.push('Verify compliance certifications');
-    }
-
-    // Scale-specific
-    if (effective.project?.scale) {
-      queries.push(`${need} API for ${effective.project.scale}`);
-      if (effective.project.scale === 'enterprise') {
-        focusAreas.push('Check SLAs and support tiers');
-      }
-    }
-
-    // Stack-specific
-    if (effective.project?.stack?.language) {
-      queries.push(`${need} ${effective.project.stack.language} SDK`);
-      focusAreas.push(`Verify ${effective.project.stack.language} SDK quality`);
-    }
-
-    // Region-specific
-    if (effective.project?.regions?.length) {
-      focusAreas.push(`Check availability in: ${effective.project.regions.join(', ')}`);
-    }
-
-    // Self-hosted
-    if (effective.constraints?.selfHosted) {
-      queries.push(`${need} self-hosted open source`);
-      focusAreas.push('Evaluate self-hosting complexity');
-    }
-
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          need,
-          profileSummary: summary,
-          queries,
-          focusAreas,
-          instructions: 'Run these searches and focus on the listed areas based on the project profile.',
-        }, null, 2),
-      }],
-    };
-  }
-
-  // ==================
   // report_outcome
   // ==================
   if (name === 'report_outcome') {
@@ -741,7 +478,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       notes?: string;
     };
 
-    // Update the local decision record with outcome info
     try {
       const decision = await getDecision(projectDir, decisionId);
       if (decision) {
@@ -777,7 +513,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('stacksherpa MCP server v2.0.0 running');
+  console.error('stacksherpa MCP server v3.0.0 running');
 }
 
 main().catch(console.error);

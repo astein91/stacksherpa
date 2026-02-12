@@ -148,10 +148,11 @@ const aiPricingSchema = {
 };
 
 export async function scrapePricing(
-  providerId: string
+  providerId: string,
+  options?: { pricingUrl?: string }
 ): Promise<ScrapeResult<ScrapedPricing>> {
   const startTime = Date.now();
-  const url = pricingUrls[providerId];
+  const url = options?.pricingUrl ?? pricingUrls[providerId];
 
   if (!url) {
     return {

@@ -11,12 +11,23 @@
  * 1. GitHub issues (known bugs)
  * 2. Pricing (for stale providers)
  * 3. AI benchmarks (weekly)
+ * 4. API discovery (weekly, Wednesdays)
+ * 5. Metadata refresh (daily, up to 3 providers)
  */
 
-import { upsertKnownIssue, getStaleProviders, insertPricing } from '../db/client.js';
+import {
+  upsertKnownIssue,
+  getStaleProviders,
+  insertPricing,
+  getProvidersWithPricingUrls,
+  getProvidersWithGithubRepos,
+  getAllActiveProviders,
+} from '../db/client.js';
 import { getProviderIssues, providerRepos } from '../scrapers/sources/github-issues.js';
 import { scrapePricing } from '../scrapers/sources/pricing.js';
 import { scrapeLMArena, scrapeArtificialAnalysis, modelNameMap } from '../scrapers/sources/benchmarks.js';
+import { discoverAndInsertAll } from '../scrapers/sources/discovery.js';
+import { refreshStaleProviderMetadata } from '../scrapers/sources/metadata-refresh.js';
 
 interface UpdateResult {
   task: string;
@@ -31,13 +42,30 @@ async function updateGitHubIssues(): Promise<UpdateResult> {
   let totalIssues = 0;
 
   try {
-    for (const providerId of Object.keys(providerRepos)) {
+    // Build provider -> repos map: start with Turso data, merge hardcoded fallbacks
+    const tursoRepos = await getProvidersWithGithubRepos();
+    const repoMap = new Map<string, string[]>();
+
+    // Turso repos (single repo per provider from DB)
+    for (const { id, githubRepo } of tursoRepos) {
+      repoMap.set(id, [githubRepo]);
+    }
+
+    // Merge hardcoded repos for any providers not yet in Turso
+    for (const [id, repos] of Object.entries(providerRepos)) {
+      if (!repoMap.has(id)) {
+        repoMap.set(id, repos);
+      }
+    }
+
+    for (const [providerId, repos] of repoMap) {
       console.log(`  Fetching issues for ${providerId}...`);
 
       try {
         const issues = await getProviderIssues(providerId, {
           minReactions: 2,
           maxIssues: 15,
+          repos,
         });
 
         for (const issue of issues) {
@@ -80,6 +108,10 @@ async function updateStalePricing(): Promise<UpdateResult> {
       return { task: 'pricing', success: true, count: 0, duration: Date.now() - start };
     }
 
+    // Build pricing URL map from Turso
+    const tursoPricingUrls = await getProvidersWithPricingUrls();
+    const pricingUrlMap = new Map(tursoPricingUrls.map(p => [p.id, p.pricingUrl]));
+
     const staleProviders = await getStaleProviders(7);
     console.log(`  Found ${staleProviders.length} providers with stale pricing`);
 
@@ -87,7 +119,8 @@ async function updateStalePricing(): Promise<UpdateResult> {
     for (const provider of staleProviders.slice(0, 5)) {
       console.log(`    Scraping ${provider.id}...`);
       try {
-        const result = await scrapePricing(provider.id);
+        const pricingUrl = pricingUrlMap.get(provider.id);
+        const result = await scrapePricing(provider.id, { pricingUrl });
         if (result.success && result.data) {
           await insertPricing(provider.id, {
             type: result.data.extracted.type ?? 'usage',
@@ -176,6 +209,72 @@ async function updateAiBenchmarks(): Promise<UpdateResult> {
   }
 }
 
+async function runDiscovery(): Promise<UpdateResult> {
+  const start = Date.now();
+
+  // Only run on Wednesdays (weekly)
+  const today = new Date().getDay();
+  if (today !== 3) {
+    console.log('  Skipping: only runs on Wednesdays');
+    return { task: 'discovery', success: true, count: 0, duration: 0 };
+  }
+
+  if (!process.env.EXA_API_KEY) {
+    console.log('  Skipping: EXA_API_KEY not set');
+    return { task: 'discovery', success: true, count: 0, duration: Date.now() - start };
+  }
+
+  try {
+    console.log('  Running discovery across all categories...');
+    const results = await discoverAndInsertAll();
+    let total = 0;
+    for (const count of results.values()) total += count;
+    return { task: 'discovery', success: true, count: total, duration: Date.now() - start };
+  } catch (error) {
+    return {
+      task: 'discovery',
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration: Date.now() - start,
+    };
+  }
+}
+
+async function refreshStaleMetadata(): Promise<UpdateResult> {
+  const start = Date.now();
+
+  if (!process.env.FIRECRAWL_API_KEY) {
+    console.log('  Skipping: FIRECRAWL_API_KEY not set');
+    return { task: 'metadata_refresh', success: true, count: 0, duration: Date.now() - start };
+  }
+
+  try {
+    // Get providers with last_verified older than 30 days
+    const stale = await getStaleProviders(30);
+    const withWebsites = stale
+      .filter(p => p.website)
+      .map(p => ({ id: p.id, website: p.website! }));
+
+    if (withWebsites.length === 0) {
+      console.log('  No stale providers with websites to refresh');
+      return { task: 'metadata_refresh', success: true, count: 0, duration: Date.now() - start };
+    }
+
+    console.log(`  Found ${withWebsites.length} stale providers, refreshing up to 3...`);
+    const results = await refreshStaleProviderMetadata(withWebsites, 3);
+    const updated = results.filter(r => r.fieldsUpdated.length > 0).length;
+
+    return { task: 'metadata_refresh', success: true, count: updated, duration: Date.now() - start };
+  } catch (error) {
+    return {
+      task: 'metadata_refresh',
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration: Date.now() - start,
+    };
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -203,6 +302,14 @@ async function main() {
   // 3. Update AI benchmarks (weekly)
   console.log('\n3. AI benchmarks...');
   results.push(await updateAiBenchmarks());
+
+  // 4. Discover new APIs (weekly, Wednesdays)
+  console.log('\n4. API discovery...');
+  results.push(await runDiscovery());
+
+  // 5. Refresh stale metadata (daily)
+  console.log('\n5. Metadata refresh...');
+  results.push(await refreshStaleMetadata());
 
   // Summary
   console.log('\n=== Summary ===');

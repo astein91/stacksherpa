@@ -14,6 +14,7 @@
 import { createClient } from '@libsql/client';
 import { SCHEMA } from './schema.js';
 import { knowledgeBase } from '../knowledge.js';
+import { providerRepos } from '../scrapers/sources/github-issues.js';
 import type { KnownProvider } from '../types.js';
 
 const TURSO_URL = process.env.TURSO_DATABASE_URL ?? 'libsql://api-broker-astein91.aws-us-west-2.turso.io';
@@ -42,11 +43,21 @@ async function ensureSchema() {
 }
 
 async function upsertProvider(provider: KnownProvider): Promise<void> {
+  const id = provider.id ?? provider.name.toLowerCase().replace(/\s+/g, '-');
+
+  // Derive pricing_url from pricing.source
+  const pricingUrl = provider.pricing?.source ?? null;
+
+  // Derive github_repo from providerRepos map (first repo as primary)
+  const repos = providerRepos[id];
+  const githubRepo = repos?.[0] ?? null;
+
   await client.execute({
     sql: `
       INSERT INTO providers (
         id, name, description, category, subcategories, status,
-        website, docs_url, package, package_alt_names,
+        website, docs_url, pricing_url, github_repo,
+        package, package_alt_names,
         compliance, data_residency, self_hostable, on_prem_option,
         strengths, weaknesses, best_for,
         avoid_if, requires, best_when, alternatives,
@@ -54,6 +65,7 @@ async function upsertProvider(provider: KnownProvider): Promise<void> {
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
+        ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?, ?,
@@ -67,6 +79,8 @@ async function upsertProvider(provider: KnownProvider): Promise<void> {
         status = excluded.status,
         website = excluded.website,
         docs_url = excluded.docs_url,
+        pricing_url = COALESCE(excluded.pricing_url, providers.pricing_url),
+        github_repo = COALESCE(excluded.github_repo, providers.github_repo),
         package = excluded.package,
         package_alt_names = excluded.package_alt_names,
         compliance = excluded.compliance,
@@ -85,7 +99,7 @@ async function upsertProvider(provider: KnownProvider): Promise<void> {
         last_verified = excluded.last_verified
     `,
     args: [
-      provider.id ?? provider.name.toLowerCase().replace(/\s+/g, '-'),
+      id,
       provider.name,
       provider.description ?? null,
       provider.category ?? 'unknown',
@@ -93,6 +107,8 @@ async function upsertProvider(provider: KnownProvider): Promise<void> {
       provider.status ?? 'active',
       provider.website ?? null,
       provider.docsUrl ?? null,
+      pricingUrl,
+      githubRepo,
       provider.package ?? null,
       JSON.stringify(provider.packageAltNames ?? {}),
       JSON.stringify(provider.compliance ?? []),

@@ -27,6 +27,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_WRITE_TOKEN: ${{ secrets.TURSO_WRITE_TOKEN }}
         run: npm run cron:daily

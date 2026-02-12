@@ -6,6 +6,8 @@
 
 import Exa from 'exa-js';
 import type { DiscoveredAPI, DiscoveryConfig } from '../types.js';
+import { getProvidersByCategory, insertDiscoveredProvider } from '../../db/client.js';
+import type { KnownProvider } from '../../types.js';
 
 const exa = new Exa(process.env.EXA_API_KEY);
 
@@ -248,6 +250,88 @@ export async function researchProvider(
     }
   } catch (e) {
     // Ignore
+  }
+
+  return results;
+}
+
+/**
+ * Discover new APIs for a category and insert them into Turso with review_status='pending'.
+ * Checks existing providers by website domain to avoid duplicates.
+ */
+export async function discoverAndInsert(category: string): Promise<number> {
+  const discovered = await discoverNewAPIs(category);
+  if (discovered.length === 0) return 0;
+
+  // Get existing providers to check for duplicates by domain
+  const existing = await getProvidersByCategory(category);
+  const existingDomains = new Set<string>();
+  for (const p of existing) {
+    if (p.website) {
+      try { existingDomains.add(new URL(p.website).hostname); } catch {}
+    }
+  }
+
+  let inserted = 0;
+
+  for (const api of discovered) {
+    // Skip if domain already known
+    try {
+      const domain = new URL(api.website).hostname;
+      if (existingDomains.has(domain)) continue;
+      existingDomains.add(domain); // prevent dupe within batch
+    } catch {
+      continue;
+    }
+
+    // Research the provider for additional URLs
+    const research = await researchProvider(api.name, api.website);
+
+    const provider: KnownProvider = {
+      id: api.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name: api.name,
+      description: api.description.slice(0, 500),
+      website: api.website,
+      category,
+      docsUrl: research.docs,
+      pricingUrl: research.pricing,
+      githubRepo: research.github,
+      reviewStatus: 'pending',
+    };
+
+    try {
+      await insertDiscoveredProvider(provider, 'pending');
+      inserted++;
+    } catch (err) {
+      console.error(`  Failed to insert ${api.name}:`, err);
+    }
+
+    // Rate limit
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  return inserted;
+}
+
+/**
+ * Run discovery across all configured categories and insert to Turso.
+ */
+export async function discoverAndInsertAll(): Promise<Map<string, number>> {
+  const results = new Map<string, number>();
+
+  for (const config of discoveryConfigs) {
+    console.log(`Discovering for ${config.category}...`);
+    try {
+      const count = await discoverAndInsert(config.category);
+      results.set(config.category, count);
+      console.log(`  Found ${count} new providers`);
+    } catch (err) {
+      console.error(`  Discovery failed for ${config.category}:`, err);
+      results.set(config.category, 0);
+    }
+
+    // Rate limit between categories
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   return results;

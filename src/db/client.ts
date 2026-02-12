@@ -55,7 +55,7 @@ export async function getProvidersByCategory(category: string): Promise<KnownPro
   const db = getClient();
 
   const result = await db.execute({
-    sql: `SELECT * FROM providers WHERE category = ? AND status = 'active'`,
+    sql: `SELECT * FROM providers WHERE category = ? AND status = 'active' AND review_status = 'approved'`,
     args: [category],
   });
 
@@ -113,6 +113,81 @@ export async function getProviderById(id: string): Promise<KnownProvider | null>
 }
 
 /**
+ * Get all providers in a category with pricing, issues, and benchmarks in batch.
+ * Returns fully enriched providers in 2-4 queries instead of N individual lookups.
+ */
+export async function getProvidersByCategoryEnriched(category: string): Promise<KnownProvider[]> {
+  const db = getClient();
+
+  // 1. Get all active, approved providers in this category
+  const providerResult = await db.execute({
+    sql: `SELECT * FROM providers WHERE category = ? AND status = 'active' AND review_status = 'approved'`,
+    args: [category],
+  });
+
+  if (providerResult.rows.length === 0) return [];
+
+  const providers = providerResult.rows.map(row => rowToProvider(row as unknown as ProviderRow));
+  const ids = providers.map(p => p.id!);
+  const placeholders = ids.map(() => '?').join(', ');
+
+  // 2. Batch fetch pricing for all providers
+  const pricingResult = await db.execute({
+    sql: `SELECT * FROM latest_pricing WHERE provider_id IN (${placeholders})`,
+    args: ids,
+  });
+
+  const pricingByProvider = new Map<string, PricingModel>();
+  for (const row of pricingResult.rows) {
+    const r = row as unknown as PricingRow;
+    pricingByProvider.set(r.provider_id, rowToPricing(r));
+  }
+
+  // 3. Batch fetch known issues for all providers
+  const issuesResult = await db.execute({
+    sql: `SELECT * FROM active_issues WHERE provider_id IN (${placeholders})`,
+    args: ids,
+  });
+
+  const issuesByProvider = new Map<string, KnownIssue[]>();
+  for (const row of issuesResult.rows) {
+    const r = row as unknown as KnownIssueRow;
+    const list = issuesByProvider.get(r.provider_id) ?? [];
+    list.push(rowToKnownIssue(r));
+    issuesByProvider.set(r.provider_id, list);
+  }
+
+  // 4. Batch fetch AI benchmarks if this is the AI category
+  const benchmarksByProvider = new Map<string, KnownProvider['aiBenchmarks']>();
+  if (category === 'ai') {
+    const benchResult = await db.execute({
+      sql: `SELECT * FROM latest_ai_benchmarks WHERE provider_id IN (${placeholders})`,
+      args: ids,
+    });
+
+    for (const row of benchResult.rows) {
+      const r = row as unknown as Record<string, unknown>;
+      benchmarksByProvider.set(r.provider_id as string, rowToAiBenchmarks(r));
+    }
+  }
+
+  // Assemble enriched providers
+  for (const provider of providers) {
+    const id = provider.id!;
+    const pricing = pricingByProvider.get(id);
+    if (pricing) provider.pricing = pricing;
+
+    const issues = issuesByProvider.get(id);
+    if (issues) provider.knownIssues = issues;
+
+    const benchmarks = benchmarksByProvider.get(id);
+    if (benchmarks) provider.aiBenchmarks = benchmarks;
+  }
+
+  return providers;
+}
+
+/**
  * Search providers with filters
  */
 export async function searchProviders(filters: {
@@ -127,7 +202,7 @@ export async function searchProviders(filters: {
   let sql = `
     SELECT DISTINCT p.* FROM providers p
     LEFT JOIN latest_pricing pr ON p.id = pr.provider_id
-    WHERE p.status = 'active'
+    WHERE p.status = 'active' AND p.review_status = 'approved'
   `;
   const args: (string | number)[] = [];
 
@@ -184,7 +259,7 @@ export async function getCategories(): Promise<{ category: string; count: number
   const result = await db.execute(`
     SELECT category, COUNT(*) as count
     FROM providers
-    WHERE status = 'active'
+    WHERE status = 'active' AND review_status = 'approved'
     GROUP BY category
     ORDER BY count DESC
   `);
@@ -205,7 +280,7 @@ export async function getProviderEcosystems(): Promise<Map<string, string>> {
   const result = await db.execute(`
     SELECT LOWER(name) as name, ecosystem
     FROM providers
-    WHERE ecosystem IS NOT NULL AND ecosystem != '' AND status = 'active'
+    WHERE ecosystem IS NOT NULL AND ecosystem != '' AND status = 'active' AND review_status = 'approved'
   `);
 
   return new Map(result.rows.map(r => [r.name as string, r.ecosystem as string]));
@@ -253,15 +328,17 @@ export async function upsertProvider(provider: KnownProvider): Promise<void> {
   await db.execute({
     sql: `
       INSERT INTO providers (
-        id, name, description, category, subcategories, status,
-        website, docs_url, package, package_alt_names,
+        id, name, description, category, subcategories, status, review_status,
+        website, docs_url, pricing_url, github_repo,
+        package, package_alt_names,
         compliance, data_residency, self_hostable, on_prem_option,
         strengths, weaknesses, best_for,
         avoid_if, requires, best_when, alternatives,
         ecosystem, updated_at, last_verified
       ) VALUES (
-        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
+        ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?, ?,
@@ -273,8 +350,11 @@ export async function upsertProvider(provider: KnownProvider): Promise<void> {
         category = excluded.category,
         subcategories = excluded.subcategories,
         status = excluded.status,
+        review_status = COALESCE(excluded.review_status, providers.review_status),
         website = excluded.website,
         docs_url = excluded.docs_url,
+        pricing_url = COALESCE(excluded.pricing_url, providers.pricing_url),
+        github_repo = COALESCE(excluded.github_repo, providers.github_repo),
         package = excluded.package,
         package_alt_names = excluded.package_alt_names,
         compliance = excluded.compliance,
@@ -299,8 +379,11 @@ export async function upsertProvider(provider: KnownProvider): Promise<void> {
       provider.category ?? 'unknown',
       JSON.stringify(provider.subcategories ?? []),
       provider.status ?? 'active',
+      provider.reviewStatus ?? 'approved',
       provider.website ?? null,
       provider.docsUrl ?? null,
+      provider.pricingUrl ?? null,
+      provider.githubRepo ?? null,
       provider.package ?? null,
       JSON.stringify(provider.packageAltNames ?? {}),
       JSON.stringify(provider.compliance ?? []),
@@ -392,6 +475,156 @@ export async function upsertKnownIssue(providerId: string, issue: KnownIssue): P
 }
 
 // ============================================
+// Turso-First Lookup Methods
+// ============================================
+
+/**
+ * Get providers with pricing URLs (for dynamic pricing scraper)
+ */
+export async function getProvidersWithPricingUrls(): Promise<{ id: string; pricingUrl: string }[]> {
+  const db = getClient();
+  const result = await db.execute(`
+    SELECT id, pricing_url FROM providers
+    WHERE pricing_url IS NOT NULL AND status = 'active'
+  `);
+  return result.rows.map(r => ({ id: r.id as string, pricingUrl: r.pricing_url as string }));
+}
+
+/**
+ * Get providers with GitHub repos (for dynamic issue scraper)
+ */
+export async function getProvidersWithGithubRepos(): Promise<{ id: string; githubRepo: string }[]> {
+  const db = getClient();
+  const result = await db.execute(`
+    SELECT id, github_repo FROM providers
+    WHERE github_repo IS NOT NULL AND status = 'active'
+  `);
+  return result.rows.map(r => ({ id: r.id as string, githubRepo: r.github_repo as string }));
+}
+
+/**
+ * Insert a discovered provider with review_status (requires write token)
+ */
+export async function insertDiscoveredProvider(
+  provider: KnownProvider,
+  reviewStatus: 'approved' | 'pending' | 'rejected' = 'pending'
+): Promise<void> {
+  const db = getWriteClient();
+  const id = provider.id ?? provider.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  await db.execute({
+    sql: `
+      INSERT INTO providers (
+        id, name, description, category, status, review_status,
+        website, docs_url, pricing_url, github_repo,
+        updated_at, last_verified
+      ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      ON CONFLICT(id) DO NOTHING
+    `,
+    args: [
+      id,
+      provider.name,
+      provider.description ?? null,
+      provider.category ?? 'unknown',
+      reviewStatus,
+      provider.website ?? null,
+      provider.docsUrl ?? null,
+      provider.pricingUrl ?? null,
+      provider.githubRepo ?? null,
+      provider.lastVerified ?? null,
+    ],
+  });
+}
+
+/**
+ * Update a provider's review status (requires write token)
+ */
+export async function updateProviderReviewStatus(
+  id: string,
+  reviewStatus: 'approved' | 'pending' | 'rejected'
+): Promise<void> {
+  const db = getWriteClient();
+  await db.execute({
+    sql: `UPDATE providers SET review_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    args: [reviewStatus, id],
+  });
+}
+
+/**
+ * Get providers by review status
+ */
+export async function getProvidersByReviewStatus(
+  reviewStatus: 'approved' | 'pending' | 'rejected'
+): Promise<KnownProvider[]> {
+  const db = getClient();
+  const result = await db.execute({
+    sql: `SELECT * FROM providers WHERE review_status = ? ORDER BY updated_at DESC`,
+    args: [reviewStatus],
+  });
+  return result.rows.map(row => rowToProvider(row as unknown as ProviderRow));
+}
+
+/**
+ * Get all active providers (for freshness checks)
+ */
+export async function getAllActiveProviders(): Promise<KnownProvider[]> {
+  const db = getClient();
+  const result = await db.execute(`
+    SELECT * FROM providers WHERE status = 'active' AND review_status = 'approved'
+  `);
+  return result.rows.map(row => rowToProvider(row as unknown as ProviderRow));
+}
+
+/**
+ * Update provider metadata fields (conservative — only fills empty fields by default)
+ */
+export async function updateProviderMetadata(
+  id: string,
+  fields: Partial<Pick<KnownProvider, 'description' | 'pricingUrl' | 'githubRepo' | 'docsUrl' | 'compliance' | 'package'>>,
+  overwrite = false
+): Promise<void> {
+  const db = getWriteClient();
+
+  const setClauses: string[] = [];
+  const args: (string | null)[] = [];
+
+  if (fields.description !== undefined) {
+    setClauses.push(overwrite ? 'description = ?' : 'description = COALESCE(description, ?)');
+    args.push(fields.description);
+  }
+  if (fields.pricingUrl !== undefined) {
+    setClauses.push(overwrite ? 'pricing_url = ?' : 'pricing_url = COALESCE(pricing_url, ?)');
+    args.push(fields.pricingUrl);
+  }
+  if (fields.githubRepo !== undefined) {
+    setClauses.push(overwrite ? 'github_repo = ?' : 'github_repo = COALESCE(github_repo, ?)');
+    args.push(fields.githubRepo);
+  }
+  if (fields.docsUrl !== undefined) {
+    setClauses.push(overwrite ? 'docs_url = ?' : 'docs_url = COALESCE(docs_url, ?)');
+    args.push(fields.docsUrl);
+  }
+  if (fields.compliance !== undefined) {
+    setClauses.push(overwrite ? 'compliance = ?' : 'compliance = COALESCE(compliance, ?)');
+    args.push(JSON.stringify(fields.compliance));
+  }
+  if (fields.package !== undefined) {
+    setClauses.push(overwrite ? 'package = ?' : 'package = COALESCE(package, ?)');
+    args.push(fields.package);
+  }
+
+  if (setClauses.length === 0) return;
+
+  setClauses.push('updated_at = CURRENT_TIMESTAMP');
+  args.push(id);
+
+  await db.execute({
+    sql: `UPDATE providers SET ${setClauses.join(', ')} WHERE id = ?`,
+    args,
+  });
+}
+
+// ============================================
 // Row to Type Converters
 // ============================================
 
@@ -422,8 +655,11 @@ function rowToProvider(row: ProviderRow): KnownProvider {
     category: row.category,
     subcategories: parseJson(row.subcategories),
     status: row.status as KnownProvider['status'],
+    reviewStatus: row.review_status as KnownProvider['reviewStatus'],
     website: row.website ?? undefined,
     docsUrl: row.docs_url ?? undefined,
+    pricingUrl: row.pricing_url ?? undefined,
+    githubRepo: row.github_repo ?? undefined,
     package: row.package ?? undefined,
     packageAltNames: parseJson(row.package_alt_names),
     compliance: parseJson(row.compliance),

@@ -123,7 +123,7 @@ export interface ProjectRegistry extends FileMeta {
 }
 
 // ============================================
-// Computed Taste (derived from all decisions)
+// Experience Summaries (derived from decisions)
 // ============================================
 
 export interface ExperienceSummary {
@@ -137,20 +137,6 @@ export interface ExperienceSummary {
   date: string;
 }
 
-export interface ScoredPattern {
-  id: string;
-  signal: string;                           // "prefers:Resend:email"
-  confidence: number;                       // 0.0 - 1.0
-  evidenceIds: string[];                    // Decision IDs
-  firstObserved: string;
-  lastReinforced: string;
-}
-
-export interface ComputedTaste {
-  experiences: ExperienceSummary[];
-  patterns: ScoredPattern[];
-  computedAt: string;
-}
 
 // ============================================
 // Effective Profile (merged result)
@@ -182,10 +168,6 @@ export interface Gap {
   impact: 'high' | 'medium' | 'low';
 }
 
-export interface RecommendationContext {
-  relevantExperiences: ExperienceSummary[];
-  appliedPatterns: Array<{ signal: string; confidence: number }>;
-}
 
 // ============================================
 // Legacy Types (used for migration)
@@ -335,7 +317,12 @@ export interface KnownProvider {
 
   // Status & freshness
   status?: 'active' | 'beta' | 'deprecated' | 'sunset';
+  reviewStatus?: 'approved' | 'pending' | 'rejected';
   lastVerified?: string;  // ISO date - when we last checked all data
+
+  // URLs (also stored on provider row for Turso-first lookups)
+  pricingUrl?: string;
+  githubRepo?: string;
 
   // SDK/Package info (primary)
   package?: string;

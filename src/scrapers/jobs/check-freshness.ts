@@ -6,7 +6,7 @@
 
 import type { FreshnessCheck } from '../types.js';
 import type { KnownProvider } from '../../types.js';
-import { knowledgeBase } from '../../knowledge.js';
+import { getAllActiveProviders } from '../../db/client.js';
 
 // Freshness thresholds (in days)
 const THRESHOLDS = {
@@ -130,7 +130,7 @@ export function checkProviderFreshness(provider: KnownProvider): FreshnessCheck[
   return checks;
 }
 
-export function checkAllFreshness(): {
+export async function checkAllFreshness(): Promise<{
   fresh: FreshnessCheck[];
   stale: FreshnessCheck[];
   critical: FreshnessCheck[];
@@ -140,14 +140,13 @@ export function checkAllFreshness(): {
     stale: number;
     critical: number;
   };
-} {
+}> {
   const allChecks: FreshnessCheck[] = [];
 
-  for (const [category, providers] of Object.entries(knowledgeBase)) {
-    for (const provider of providers) {
-      const checks = checkProviderFreshness(provider);
-      allChecks.push(...checks);
-    }
+  const providers = await getAllActiveProviders();
+  for (const provider of providers) {
+    const checks = checkProviderFreshness(provider);
+    allChecks.push(...checks);
   }
 
   const fresh = allChecks.filter(c => c.status === 'fresh');
@@ -168,12 +167,12 @@ export function checkAllFreshness(): {
 }
 
 // Get providers that need immediate attention
-export function getUpdateQueue(): {
+export async function getUpdateQueue(): Promise<{
   providerId: string;
   fields: string[];
   priority: 'high' | 'medium' | 'low';
-}[] {
-  const { stale, critical } = checkAllFreshness();
+}[]> {
+  const { stale, critical } = await checkAllFreshness();
 
   // Group by provider
   const byProvider = new Map<string, FreshnessCheck[]>();
@@ -214,7 +213,7 @@ export function getUpdateQueue(): {
 
 // CLI runner
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const result = checkAllFreshness();
+  const result = await checkAllFreshness();
   console.log('\n=== Freshness Report ===\n');
   console.log(`Total checks: ${result.summary.total}`);
   console.log(`Fresh: ${result.summary.fresh}`);
@@ -238,7 +237,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
   }
 
-  const queue = getUpdateQueue();
+  const queue = await getUpdateQueue();
   if (queue.length > 0) {
     console.log('\n📋 Update Queue:');
     for (const item of queue.slice(0, 5)) {

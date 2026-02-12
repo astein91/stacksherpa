@@ -277,11 +277,13 @@ export async function getProviderIssues(
     minReactions?: number;
     maxIssues?: number;
     since?: string;  // ISO date
+    repos?: string[];  // Override repos from Turso
   } = {}
 ): Promise<KnownIssue[]> {
   const { minReactions = 2, maxIssues = 20, since } = options;
 
-  const repos = providerRepos[providerId];
+  // Use provided repos (from Turso), fall back to hardcoded map
+  const repos = options.repos ?? providerRepos[providerId];
   if (!repos || repos.length === 0) {
     console.warn(`No repos configured for provider: ${providerId}`);
     return [];

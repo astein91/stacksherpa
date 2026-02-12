@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS providers (
   category TEXT NOT NULL,
   subcategories TEXT,  -- JSON array
   status TEXT DEFAULT 'active',
+  review_status TEXT DEFAULT 'approved' CHECK(review_status IN ('approved', 'pending', 'rejected')),
 
   -- URLs
   website TEXT,
@@ -213,6 +214,7 @@ CREATE TABLE IF NOT EXISTS decisions (
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_providers_category ON providers(category);
 CREATE INDEX IF NOT EXISTS idx_providers_status ON providers(status);
+CREATE INDEX IF NOT EXISTS idx_providers_review_status ON providers(review_status);
 CREATE INDEX IF NOT EXISTS idx_pricing_provider ON pricing(provider_id);
 CREATE INDEX IF NOT EXISTS idx_known_issues_provider ON known_issues(provider_id);
 CREATE INDEX IF NOT EXISTS idx_known_issues_severity ON known_issues(severity);
@@ -265,6 +267,7 @@ export interface ProviderRow {
   category: string;
   subcategories: JsonField;
   status: string;
+  review_status: string;
   website: string | null;
   docs_url: string | null;
   pricing_url: string | null;
