@@ -2,12 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getCategories, getProvidersByCategory } from "@/lib/db";
 
-export const revalidate = 43200;
-
-export async function generateStaticParams() {
-  const categories = await getCategories();
-  return categories.map((c) => ({ category: c.category }));
-}
+export const dynamic = "force-dynamic";
 
 function formatCategory(slug: string): string {
   return slug

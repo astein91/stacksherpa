@@ -1,15 +1,12 @@
-import { createClient, type Client } from "@libsql/client";
-
-const TURSO_URL =
-  process.env.TURSO_DATABASE_URL ?? "libsql://api-broker-astein91.aws-us-west-2.turso.io";
-const TURSO_TOKEN =
-  process.env.TURSO_AUTH_TOKEN ?? "";
+import { createClient, type Client } from "@libsql/client/web";
 
 let client: Client | null = null;
 
 function getClient(): Client {
   if (!client) {
-    client = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
+    const url = process.env.TURSO_DATABASE_URL ?? "libsql://api-broker-astein91.aws-us-west-2.turso.io";
+    const authToken = process.env.TURSO_AUTH_TOKEN ?? "";
+    client = createClient({ url, authToken: authToken || undefined });
   }
   return client;
 }

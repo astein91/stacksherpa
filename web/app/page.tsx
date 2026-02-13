@@ -1,6 +1,6 @@
 import { getCategories } from "@/lib/db";
 
-export const revalidate = 43200; // 12 hours
+export const dynamic = "force-dynamic";
 
 function formatCategory(slug: string): string {
   return slug
