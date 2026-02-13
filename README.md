@@ -97,7 +97,6 @@ Turso (shared, read-only for clients)
   providers      — 450+ providers with rich metadata
   pricing        — versioned pricing snapshots
   known_issues   — scraped from GitHub (reactions, severity)
-  ai_benchmarks  — LMArena + Artificial Analysis scores
   discovery_log  — audit trail of bootstrap runs
 
 Local (~/.stacksherpa/)
@@ -151,10 +150,9 @@ Runs on a schedule (GitHub Actions or manually):
 |------|----------|--------------|
 | GitHub issues | Every run | Scrapes issues with 2+ reactions from provider repos |
 | Pricing | Every run | Re-scrapes up to 3 stale providers via Firecrawl |
-| AI benchmarks | Mondays | Updates LMArena and Artificial Analysis scores |
 | Discovery | 1st & 15th | Finds new providers via Exa search |
 | Metadata refresh | Every run | Re-scrapes 2 stale provider websites |
-| Agent refresh | Mondays | Claude Haiku re-evaluates provider profiles |
+| Agent refresh | Daily (AI categories), Mondays (all) | Claude Haiku re-evaluates provider profiles with live web data |
 | Bootstrap | 1st of month | Full agentic discovery across all 35 categories |
 
 ### Bootstrap pipeline (`npm run cron:bootstrap`)
@@ -165,9 +163,9 @@ An AI agent (Claude Haiku + Exa search + Firecrawl) autonomously discovers new p
 2. Searches for comparison articles and recent launches
 3. Scrapes each candidate's website for accurate details
 4. Validates against category definitions and blocked domains
-5. Inserts as `review_status = 'pending'` with full audit trail
+5. Auto-approves providers passing quality gate (description >100 chars, website, docs URL, 2+ strengths); otherwise inserts as `pending`
 
-New discoveries require manual approval before appearing in recommendations:
+Providers that don't pass auto-approval require manual review:
 
 ```bash
 npm run cron:review -- --list                    # See what's pending
