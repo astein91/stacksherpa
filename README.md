@@ -1,19 +1,29 @@
 # stacksherpa
 
-Intelligent API recommendation engine for Claude Code. Silently picks the best APIs for your stack based on your project profile, constraints, and past experiences.
+Intelligent API recommendation engine for Claude Code. When you need an external API, stacksherpa silently picks the best one for your stack — no research required.
 
-**450+ providers across 35 categories** — kept fresh by an agentic pipeline that discovers, scrapes, and updates the catalog automatically.
+**450+ providers across 35 categories** &middot; **[Browse the catalog](https://stacksherpa.vercel.app)**
 
-**[Browse the catalog &rarr; stacksherpa.vercel.app](https://stacksherpa.vercel.app)**
+---
 
-## Install
+## Quick start
 
-Add to your Claude Code MCP config (`~/.claude/settings.json`):
+### Option 1: Claude Code skill (recommended)
+
+Install the skill directly from npm — Claude will automatically consult stacksherpa whenever you need an API:
+
+```bash
+claude mcp add stacksherpa -- npx -y stacksherpa
+```
+
+### Option 2: Manual MCP config
+
+Add to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
-    "api-broker": {
+    "stacksherpa": {
       "command": "npx",
       "args": ["-y", "stacksherpa"]
     }
@@ -21,13 +31,30 @@ Add to your Claude Code MCP config (`~/.claude/settings.json`):
 }
 ```
 
-That's it. The MCP server starts automatically when Claude needs it.
+### Option 3: Project-level config
+
+Add to your project's `.mcp.json` to share with your team:
+
+```json
+{
+  "mcpServers": {
+    "stacksherpa": {
+      "command": "npx",
+      "args": ["-y", "stacksherpa"]
+    }
+  }
+}
+```
+
+**No API keys needed.** The provider catalog is hosted on a shared read-only database. Just install and go.
+
+---
 
 ## What it does
 
-When you ask Claude to implement something that needs an external API (email, payments, auth, etc.), stacksherpa:
+When you ask Claude to build something that needs an external API (email, payments, auth, etc.), stacksherpa:
 
-1. Looks up all providers in the relevant category from a shared Turso database
+1. Looks up all providers in the relevant category from a shared database
 2. Evaluates them against your project profile — stack, scale, compliance, budget
 3. Factors in taste learned from your past decisions across all projects
 4. Returns the best match with confidence level and rationale
