@@ -132,39 +132,6 @@ CREATE TABLE IF NOT EXISTS reliability (
   measured_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- AI Benchmarks (for AI/LLM providers)
-CREATE TABLE IF NOT EXISTS ai_benchmarks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  provider_id TEXT NOT NULL REFERENCES providers(id),
-  model_name TEXT,
-
-  -- LMArena
-  lmarena_elo INTEGER,
-  lmarena_rank INTEGER,
-  lmarena_category TEXT,
-
-  -- Artificial Analysis
-  aa_quality_index REAL,
-  aa_speed_index REAL,
-  aa_price_per_m_token REAL,
-  aa_tokens_per_second REAL,
-  aa_ttft_ms REAL,
-
-  -- Context window
-  context_max_tokens INTEGER,
-  context_effective_tokens INTEGER,
-
-  -- Capabilities (as JSON for flexibility)
-  capabilities TEXT,  -- JSON object
-
-  -- Standard benchmarks
-  benchmarks TEXT,  -- JSON array of {name, score, maxScore}
-
-  measured_at TEXT DEFAULT CURRENT_TIMESTAMP,
-
-  UNIQUE(provider_id, model_name, measured_at)
-);
-
 -- Known issues (from GitHub, user reports, etc.)
 CREATE TABLE IF NOT EXISTS known_issues (
   id TEXT PRIMARY KEY,  -- e.g., gh-openai-openai-node-123
@@ -230,18 +197,6 @@ INNER JOIN (
   FROM pricing
   GROUP BY provider_id
 ) latest ON p.provider_id = latest.provider_id AND p.scraped_at = latest.max_scraped;
-
--- View: Latest AI benchmarks per provider
-CREATE VIEW IF NOT EXISTS latest_ai_benchmarks AS
-SELECT b.*
-FROM ai_benchmarks b
-INNER JOIN (
-  SELECT provider_id, model_name, MAX(measured_at) as max_measured
-  FROM ai_benchmarks
-  GROUP BY provider_id, model_name
-) latest ON b.provider_id = latest.provider_id
-  AND b.model_name = latest.model_name
-  AND b.measured_at = latest.max_measured;
 
 -- View: Active issues (not resolved)
 CREATE VIEW IF NOT EXISTS active_issues AS

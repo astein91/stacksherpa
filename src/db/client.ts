@@ -97,24 +97,12 @@ export async function getProviderById(id: string): Promise<KnownProvider | null>
     provider.knownIssues = issuesResult.rows.map(r => rowToKnownIssue(r as unknown as KnownIssueRow));
   }
 
-  // Get AI benchmarks if applicable
-  if (row.category === 'ai') {
-    const benchResult = await db.execute({
-      sql: `SELECT * FROM latest_ai_benchmarks WHERE provider_id = ?`,
-      args: [id],
-    });
-
-    if (benchResult.rows.length > 0) {
-      provider.aiBenchmarks = rowToAiBenchmarks(benchResult.rows[0] as unknown as Record<string, unknown>);
-    }
-  }
-
   return provider;
 }
 
 /**
- * Get all providers in a category with pricing, issues, and benchmarks in batch.
- * Returns fully enriched providers in 2-4 queries instead of N individual lookups.
+ * Get all providers in a category with pricing and issues in batch.
+ * Returns fully enriched providers in 2-3 queries instead of N individual lookups.
  */
 export async function getProvidersByCategoryEnriched(category: string): Promise<KnownProvider[]> {
   const db = getClient();
@@ -157,20 +145,6 @@ export async function getProvidersByCategoryEnriched(category: string): Promise<
     issuesByProvider.set(r.provider_id, list);
   }
 
-  // 4. Batch fetch AI benchmarks if this is the AI category
-  const benchmarksByProvider = new Map<string, KnownProvider['aiBenchmarks']>();
-  if (category === 'ai') {
-    const benchResult = await db.execute({
-      sql: `SELECT * FROM latest_ai_benchmarks WHERE provider_id IN (${placeholders})`,
-      args: ids,
-    });
-
-    for (const row of benchResult.rows) {
-      const r = row as unknown as Record<string, unknown>;
-      benchmarksByProvider.set(r.provider_id as string, rowToAiBenchmarks(r));
-    }
-  }
-
   // Assemble enriched providers
   for (const provider of providers) {
     const id = provider.id!;
@@ -179,9 +153,6 @@ export async function getProvidersByCategoryEnriched(category: string): Promise<
 
     const issues = issuesByProvider.get(id);
     if (issues) provider.knownIssues = issues;
-
-    const benchmarks = benchmarksByProvider.get(id);
-    if (benchmarks) provider.aiBenchmarks = benchmarks;
   }
 
   return providers;
@@ -881,27 +852,3 @@ function rowToKnownIssue(row: KnownIssueRow): KnownIssue {
   };
 }
 
-function rowToAiBenchmarks(row: Record<string, unknown>): KnownProvider['aiBenchmarks'] {
-  return {
-    lmArena: row.lmarena_elo ? {
-      elo: Number(row.lmarena_elo),
-      rank: num(row.lmarena_rank) ?? undefined,
-      category: str(row.lmarena_category) ?? undefined,
-      measuredAt: str(row.measured_at) ?? '',
-    } : undefined,
-    artificialAnalysis: row.aa_quality_index ? {
-      qualityIndex: Number(row.aa_quality_index),
-      speedIndex: num(row.aa_speed_index) ?? undefined,
-      pricePerMToken: num(row.aa_price_per_m_token) ?? undefined,
-      tokensPerSecond: num(row.aa_tokens_per_second) ?? undefined,
-      ttft: num(row.aa_ttft_ms) ?? undefined,
-      measuredAt: str(row.measured_at) ?? '',
-    } : undefined,
-    contextWindow: row.context_max_tokens ? {
-      maxTokens: Number(row.context_max_tokens),
-      effectiveTokens: num(row.context_effective_tokens) ?? undefined,
-    } : undefined,
-    capabilities: parseJson(str(row.capabilities)),
-    benchmarks: parseJson(str(row.benchmarks)),
-  };
-}

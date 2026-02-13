@@ -11,7 +11,6 @@ import { getAllActiveProviders } from '../../db/client.js';
 // Freshness thresholds (in days)
 const THRESHOLDS = {
   pricing: { fresh: 7, stale: 30 },
-  benchmarks: { fresh: 14, stale: 60 },
   latency: { fresh: 7, stale: 30 },
   reliability: { fresh: 1, stale: 7 },
   general: { fresh: 30, stale: 90 },
@@ -86,30 +85,6 @@ export function checkProviderFreshness(provider: KnownProvider): FreshnessCheck[
         ? 'Re-measure latency metrics'
         : undefined,
     });
-  }
-
-  // AI Benchmarks freshness
-  if (provider.aiBenchmarks) {
-    const benchmarkDates = [
-      provider.aiBenchmarks.lmArena?.measuredAt,
-      provider.aiBenchmarks.artificialAnalysis?.measuredAt,
-      ...(provider.aiBenchmarks.benchmarks?.map(b => b.measuredAt) ?? []),
-    ].filter(Boolean);
-
-    if (benchmarkDates.length > 0) {
-      const oldestDate = benchmarkDates.sort()[0];
-      const benchmarkDays = daysSince(oldestDate);
-      checks.push({
-        providerId,
-        field: 'aiBenchmarks',
-        lastVerified: oldestDate!,
-        daysSinceVerified: benchmarkDays,
-        status: getStatus(benchmarkDays, THRESHOLDS.benchmarks),
-        suggestedAction: benchmarkDays > THRESHOLDS.benchmarks.stale
-          ? 'Update AI benchmark scores'
-          : undefined,
-      });
-    }
   }
 
   // Reliability freshness

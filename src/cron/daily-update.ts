@@ -7,12 +7,13 @@
  *
  * Requires TURSO_WRITE_TOKEN env var for database writes.
  *
- * Updates (runs every other day):
+ * Updates:
  * 1. GitHub issues (known bugs) — every run
  * 2. Pricing (stale providers) — up to 3/run
- * 3. AI benchmarks — Mondays only
- * 4. API discovery — 1st and 15th only
- * 5. Metadata refresh — up to 2/run
+ * 3. API discovery — 1st and 15th only
+ * 4. Metadata refresh — up to 2/run
+ * 5. Agent provider refresh — daily for high-priority categories (ai, ai-*), full on Mondays
+ * 6. Bootstrap discovery — 1st of month
  */
 
 import {
@@ -25,7 +26,6 @@ import {
 } from '../db/client.js';
 import { getProviderIssues, providerRepos } from '../scrapers/sources/github-issues.js';
 import { scrapePricing } from '../scrapers/sources/pricing.js';
-import { scrapeLMArena, scrapeArtificialAnalysis, modelNameMap } from '../scrapers/sources/benchmarks.js';
 import { discoverAndInsertAll } from '../scrapers/sources/discovery.js';
 import { refreshStaleProviderMetadata } from '../scrapers/sources/metadata-refresh.js';
 import { runAgentRefresh } from './agent-refresh.js';
@@ -155,62 +155,6 @@ async function updateStalePricing(): Promise<UpdateResult> {
   }
 }
 
-async function updateAiBenchmarks(): Promise<UpdateResult> {
-  const start = Date.now();
-
-  // Only run on Mondays (weekly)
-  const today = new Date().getDay();
-  if (today !== 1) {
-    console.log('  Skipping: only runs on Mondays');
-    return { task: 'ai_benchmarks', success: true, count: 0, duration: 0 };
-  }
-
-  if (!process.env.FIRECRAWL_API_KEY) {
-    console.log('  Skipping: FIRECRAWL_API_KEY not set');
-    return { task: 'ai_benchmarks', success: true, count: 0, duration: Date.now() - start };
-  }
-
-  let collected = 0;
-
-  try {
-    console.log('  Updating AI benchmarks (weekly)...');
-
-    // 1. LMArena leaderboard
-    console.log('    Scraping LMArena leaderboard...');
-    const lmResult = await scrapeLMArena();
-    if (lmResult.success && lmResult.data) {
-      console.log(`    Got ${lmResult.data.length} entries from LMArena`);
-      collected += lmResult.data.length;
-    } else {
-      console.log(`    LMArena failed: ${lmResult.error}`);
-    }
-
-    await sleep(2000);
-
-    // 2. Artificial Analysis per model
-    for (const modelId of Object.keys(modelNameMap)) {
-      console.log(`    Scraping Artificial Analysis for ${modelId}...`);
-      const aaResult = await scrapeArtificialAnalysis(modelId);
-      if (aaResult.success && aaResult.data) {
-        console.log(`      Got ${aaResult.data.benchmarks.length} metrics`);
-        collected++;
-      } else {
-        console.log(`      Failed: ${aaResult.error}`);
-      }
-      await sleep(2000);
-    }
-
-    return { task: 'ai_benchmarks', success: true, count: collected, duration: Date.now() - start };
-  } catch (error) {
-    return {
-      task: 'ai_benchmarks',
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      duration: Date.now() - start,
-    };
-  }
-}
-
 async function runDiscovery(): Promise<UpdateResult> {
   const start = Date.now();
 
@@ -279,13 +223,8 @@ async function refreshStaleMetadata(): Promise<UpdateResult> {
 
 async function runAgentProviderRefresh(): Promise<UpdateResult> {
   const start = Date.now();
-
-  // Only run on Mondays (weekly)
   const today = new Date().getDay();
-  if (today !== 1) {
-    console.log('  Skipping: only runs on Mondays');
-    return { task: 'agent_refresh', success: true, count: 0, duration: 0 };
-  }
+  const isMonday = today === 1;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.log('  Skipping: ANTHROPIC_API_KEY not set');
@@ -293,7 +232,13 @@ async function runAgentProviderRefresh(): Promise<UpdateResult> {
   }
 
   try {
-    const refreshResults = await runAgentRefresh({ full: false, dryRun: false });
+    // Mondays: full refresh of all providers
+    // Other days: only refresh high-priority categories (ai, ai-orchestration, ai-audio, ai-video, ai-image)
+    const highPriorityOnly = !isMonday;
+    if (highPriorityOnly) {
+      console.log('  Running high-priority categories only (full refresh on Mondays)');
+    }
+    const refreshResults = await runAgentRefresh({ full: false, dryRun: false, highPriorityOnly });
     const updated = refreshResults.filter(r => r.status === 'updated').length;
     return { task: 'agent_refresh', success: true, count: updated, duration: Date.now() - start };
   } catch (error) {
@@ -365,24 +310,20 @@ async function main() {
   console.log('\n2. Checking stale pricing...');
   results.push(await updateStalePricing());
 
-  // 3. Update AI benchmarks (weekly)
-  console.log('\n3. AI benchmarks...');
-  results.push(await updateAiBenchmarks());
-
-  // 4. Discover new APIs (weekly, Wednesdays)
-  console.log('\n4. API discovery...');
+  // 3. Discover new APIs (biweekly)
+  console.log('\n3. API discovery...');
   results.push(await runDiscovery());
 
-  // 5. Refresh stale metadata (daily)
-  console.log('\n5. Metadata refresh...');
+  // 4. Refresh stale metadata (daily)
+  console.log('\n4. Metadata refresh...');
   results.push(await refreshStaleMetadata());
 
-  // 6. Agent-powered provider refresh (weekly, Mondays)
-  console.log('\n6. Agent provider refresh...');
+  // 5. Agent-powered provider refresh (weekly, Mondays)
+  console.log('\n5. Agent provider refresh...');
   results.push(await runAgentProviderRefresh());
 
-  // 7. Bootstrap discovery (monthly, 1st of month)
-  console.log('\n7. Bootstrap discovery...');
+  // 6. Bootstrap discovery (monthly, 1st of month)
+  console.log('\n6. Bootstrap discovery...');
   results.push(await runBootstrapDiscovery());
 
   // Summary

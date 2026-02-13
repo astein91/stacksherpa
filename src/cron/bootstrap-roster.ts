@@ -324,11 +324,29 @@ async function handleScrapeWebsite(url: string): Promise<string> {
   }
 }
 
+/** Check if a discovered provider has enough data to auto-approve */
+function meetsAutoApproveThreshold(input: Record<string, unknown>): boolean {
+  const description = input.description as string | undefined;
+  const website = input.website as string | undefined;
+  const docsUrl = input.docsUrl as string | undefined;
+  const strengths = input.strengths as string[] | undefined;
+  const bestFor = input.bestFor as string[] | undefined;
+
+  return !!(
+    description && description.length > 100 &&
+    website &&
+    docsUrl &&
+    strengths && strengths.length >= 2 &&
+    bestFor && bestFor.length >= 1
+  );
+}
+
 async function handleRegisterProvider(
   input: Record<string, unknown>,
   dryRun: boolean,
   runId: string,
   expectedCategory: string,
+  autoApprove: boolean = true,
 ): Promise<{ result: string; registered: boolean }> {
   const name = input.name as string | undefined;
   if (!name) {
@@ -378,23 +396,29 @@ async function handleRegisterProvider(
     lastVerified: new Date().toISOString().split('T')[0],
   };
 
+  // Auto-approve if quality gate passes
+  const qualityPass = autoApprove && meetsAutoApproveThreshold(input);
+  const reviewStatus = qualityPass ? 'approved' : 'pending';
+  provider.reviewStatus = reviewStatus;
+
   if (dryRun) {
-    console.log(`    [DRY RUN] Would register: ${name} (${id}) as pending`);
-    return { result: `[DRY RUN] Would register ${name} (${id}) as pending`, registered: true };
+    console.log(`    [DRY RUN] Would register: ${name} (${id}) as ${reviewStatus}`);
+    return { result: `[DRY RUN] Would register ${name} (${id}) as ${reviewStatus}`, registered: true };
   }
 
   try {
-    await insertDiscoveredProviderFull(provider, 'pending');
+    await insertDiscoveredProviderFull(provider, reviewStatus);
     await insertDiscoveryLog({
       runId,
       providerId: id,
       providerName: name,
       category: expectedCategory,
-      action: 'registered',
+      action: qualityPass ? 'auto-approved' : 'registered',
       fieldsJson: JSON.stringify(input),
     });
-    console.log(`    Registered: ${name} (${id}) as pending`);
-    return { result: `Registered ${name} (${id}) as pending — awaiting review.`, registered: true };
+    const statusLabel = qualityPass ? 'auto-approved' : 'pending — awaiting review';
+    console.log(`    Registered: ${name} (${id}) as ${statusLabel}`);
+    return { result: `Registered ${name} (${id}) as ${statusLabel}.`, registered: true };
   } catch (err) {
     const msg = `Failed to register ${name}: ${err}`;
     console.error(`    ${msg}`);
@@ -409,6 +433,7 @@ async function handleRegisterProvider(
 interface BootstrapOptions {
   dryRun?: boolean;
   category?: string;
+  autoApprove?: boolean;
 }
 
 interface BootstrapResult {
@@ -481,6 +506,7 @@ async function bootstrapCategory(
   category: string,
   dryRun: boolean,
   runId: string,
+  autoApprove: boolean = true,
 ): Promise<BootstrapResult> {
   const result: BootstrapResult = {
     category,
@@ -579,7 +605,7 @@ async function bootstrapCategory(
           break;
 
         case 'register_provider': {
-          const registerResult = await handleRegisterProvider(input, dryRun, runId, category);
+          const registerResult = await handleRegisterProvider(input, dryRun, runId, category, autoApprove);
           toolResult = registerResult.result;
           if (registerResult.registered) {
             result.registered++;
@@ -634,8 +660,9 @@ export async function bootstrapAll(options: BootstrapOptions = {}): Promise<Boot
 
   console.log(`Run ID: ${runId}`);
 
+  const autoApprove = options.autoApprove ?? true;
   const results = await processInBatches(categories, 3, (category) =>
-    bootstrapCategory(anthropic, category, options.dryRun ?? false, runId),
+    bootstrapCategory(anthropic, category, options.dryRun ?? false, runId, autoApprove),
   );
 
   // Summary
@@ -657,7 +684,12 @@ export async function bootstrapAll(options: BootstrapOptions = {}): Promise<Boot
   }
 
   if (totalRegistered > 0) {
-    console.log(`\n${totalRegistered} new providers pending review. Run: npm run cron:review -- --list`);
+    if (autoApprove) {
+      console.log(`\n${totalRegistered} new providers (auto-approved if quality gate passed, else pending).`);
+      console.log('Check pending: npm run cron:review -- --list');
+    } else {
+      console.log(`\n${totalRegistered} new providers pending review. Run: npm run cron:review -- --list`);
+    }
   }
 
   return results;
@@ -693,6 +725,7 @@ const isDirectRun = process.argv[1]?.endsWith('bootstrap-roster.ts') ||
 if (isDirectRun) {
   const args = process.argv.slice(2);
   const isDryRun = args.includes('--dry-run');
+  const noAutoApprove = args.includes('--no-auto-approve');
   const catIdx = args.indexOf('--category');
   const singleCategory = catIdx !== -1 ? args[catIdx + 1] : undefined;
 
@@ -714,9 +747,10 @@ if (isDirectRun) {
   console.log('=== stacksherpa Bootstrap Agent ===');
   console.log(`Started at: ${new Date().toISOString()}`);
   if (isDryRun) console.log('DRY RUN enabled');
+  if (noAutoApprove) console.log('Auto-approve DISABLED — all providers will be pending');
   if (singleCategory) console.log(`Category: ${singleCategory}`);
 
-  bootstrapAll({ dryRun: isDryRun, category: singleCategory })
+  bootstrapAll({ dryRun: isDryRun, category: singleCategory, autoApprove: !noAutoApprove })
     .then(() => console.log('\nDone'))
     .catch(err => {
       console.error('Fatal error:', err);

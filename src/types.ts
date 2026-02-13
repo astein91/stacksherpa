@@ -245,51 +245,6 @@ export interface ReliabilityMetrics {
   measuredAt: string;
 }
 
-// AI/LLM specific benchmarks
-export interface AIBenchmarks {
-  // LMArena / Chatbot Arena
-  lmArena?: {
-    elo: number;
-    rank?: number;
-    category?: string;  // e.g., "coding", "overall", "hard-prompts"
-    measuredAt: string;
-  };
-
-  // Artificial Analysis
-  artificialAnalysis?: {
-    qualityIndex?: number;  // 0-100
-    speedIndex?: number;
-    pricePerMToken?: number;
-    tokensPerSecond?: number;
-    ttft?: number;  // time to first token (ms)
-    measuredAt: string;
-  };
-
-  // Standard benchmarks
-  benchmarks?: {
-    name: string;  // e.g., "MMLU", "HumanEval", "GPQA", "MATH"
-    score: number;
-    maxScore?: number;
-    measuredAt: string;
-  }[];
-
-  // Context window
-  contextWindow?: {
-    maxTokens: number;
-    effectiveTokens?: number;  // before quality degrades
-  };
-
-  // Capabilities
-  capabilities?: {
-    toolCalling?: boolean;
-    vision?: boolean;
-    audio?: boolean;
-    streaming?: boolean;
-    jsonMode?: boolean;
-    functionCalling?: boolean;
-  };
-}
-
 export interface KnownIssue {
   id: string;
   symptom: string;
@@ -343,9 +298,6 @@ export interface KnownProvider {
   // Performance metrics
   latency?: LatencyMetrics;
   reliability?: ReliabilityMetrics;
-
-  // AI/LLM specific
-  aiBenchmarks?: AIBenchmarks;
 
   // Scale fit (new format)
   bestFor?: ('hobby' | 'startup' | 'growth' | 'enterprise')[];

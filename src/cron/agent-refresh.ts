@@ -33,6 +33,19 @@ import type { KnownProvider } from '../types.js';
 import { bootstrapAll } from './bootstrap-roster.js';
 
 // ============================================
+// Category Priority
+// ============================================
+
+/** Categories where data changes fast and descriptions need frequent refresh */
+export const FAST_REFRESH_CATEGORIES = new Set([
+  'ai', 'ai-orchestration', 'ai-audio', 'ai-video', 'ai-image',
+]);
+
+/** Truncation limit for website scraping — AI categories get more context */
+const SCRAPE_LIMIT_DEFAULT = 4000;
+const SCRAPE_LIMIT_FAST = 8000;
+
+// ============================================
 // Types
 // ============================================
 
@@ -81,6 +94,8 @@ interface RefreshOptions {
   full?: boolean;
   dryRun?: boolean;
   provider?: string;
+  category?: string;
+  highPriorityOnly?: boolean;
 }
 
 // ============================================
@@ -175,8 +190,10 @@ const PROVIDER_PROFILE_TOOL: Anthropic.Tool = {
 // Context Gathering
 // ============================================
 
-async function scrapeWebsite(url: string): Promise<string | undefined> {
+async function scrapeWebsite(url: string, maxChars?: number): Promise<string | undefined> {
   if (!process.env.FIRECRAWL_API_KEY) return undefined;
+
+  const limit = maxChars ?? SCRAPE_LIMIT_DEFAULT;
 
   try {
     const FirecrawlApp = (await import('@mendable/firecrawl-js')).default;
@@ -187,8 +204,7 @@ async function scrapeWebsite(url: string): Promise<string | undefined> {
     });
 
     if (result.success && result.markdown) {
-      // Truncate to ~4000 chars to fit in context
-      return result.markdown.slice(0, 4000);
+      return result.markdown.slice(0, limit);
     }
   } catch (err) {
     console.error(`    Firecrawl failed for ${url}: ${err}`);
@@ -200,9 +216,10 @@ async function gatherContext(provider: KnownProvider): Promise<ScrapedContext> {
   const context: ScrapedContext = { existingRow: provider };
 
   // 1. Scrape website if available
+  const scrapeLimit = FAST_REFRESH_CATEGORIES.has(provider.category) ? SCRAPE_LIMIT_FAST : SCRAPE_LIMIT_DEFAULT;
   if (provider.website) {
     console.log(`    Scraping website...`);
-    context.websiteMarkdown = await scrapeWebsite(provider.website);
+    context.websiteMarkdown = await scrapeWebsite(provider.website, scrapeLimit);
   }
 
   // 2. Fetch GitHub issues
@@ -324,7 +341,16 @@ Rules:
 - Only list compliance certs you can verify from the scraped evidence.
 - Strengths must be from the enum: dx, reliability, cost, performance, support, security, customization.
 - bestFor must be from: hobby, startup, growth, enterprise.
-- Provider identity should be company/platform level, not individual models or versions.`,
+- Provider identity should be company/platform level, not individual models or versions.
+
+SPECIAL RULES FOR "ai" CATEGORY PROVIDERS:
+For providers in the "ai" category, descriptions MUST include specific, current model-level data from the scraped context:
+- Flagship model names and versions (e.g., "GPT-5.2", "Claude Opus 4.6", "Gemini 3 Pro")
+- Context window sizes (e.g., "1M tokens", "256k context")
+- Per-token pricing (e.g., "$1.75/$14 per 1M input/output tokens")
+- Benchmark rankings if available (e.g., "LMArena ELO ~1502", "#1 on Code Arena")
+- Key capabilities (multimodal, reasoning, code gen, etc.)
+This data changes rapidly and is the primary signal our recommendation engine uses for AI provider routing. A description that says "offers various LLM models" is useless — be specific about every current model found in the scraped data.`,
     messages: [{ role: 'user', content: userContent }],
     tools: [PROVIDER_PROFILE_TOOL],
     tool_choice: { type: 'tool', name: 'update_provider_profile' },
@@ -473,7 +499,7 @@ async function refreshProvider(
 // ============================================
 
 export async function runAgentRefresh(options: RefreshOptions = {}): Promise<RefreshResult[]> {
-  const { full = false, dryRun = false, provider: singleProvider } = options;
+  const { full = false, dryRun = false, provider: singleProvider, category, highPriorityOnly = false } = options;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.log('Skipping agent refresh: ANTHROPIC_API_KEY not set');
@@ -501,9 +527,25 @@ export async function runAgentRefresh(options: RefreshOptions = {}): Promise<Ref
     providers = [p];
   } else {
     providers = await getAllActiveProviders();
+
+    // Filter by category if specified
+    if (category) {
+      providers = providers.filter(p => p.category === category);
+    }
+
+    // Filter to high-priority categories only (for non-Monday daily runs)
+    if (highPriorityOnly) {
+      providers = providers.filter(p => FAST_REFRESH_CATEGORIES.has(p.category));
+    }
   }
 
-  console.log(`\n=== Agent Refresh: ${providers.length} provider(s) ===`);
+  if (providers.length === 0) {
+    console.log('No providers to refresh (after filters).');
+    return [];
+  }
+
+  const mode = highPriorityOnly ? 'high-priority only' : category ? `category: ${category}` : 'all';
+  console.log(`\n=== Agent Refresh: ${providers.length} provider(s) [${mode}] ===`);
   if (dryRun) console.log('(DRY RUN — no writes)\n');
 
   const results = await processInBatches(providers, 5, async (provider) => {
@@ -561,8 +603,11 @@ async function processInBatches<T, R>(
 const args = process.argv.slice(2);
 const isFull = args.includes('--full');
 const isDryRun = args.includes('--dry-run');
+const isHighPriority = args.includes('--high-priority');
 const providerIdx = args.indexOf('--provider');
 const singleProvider = providerIdx !== -1 ? args[providerIdx + 1] : undefined;
+const catIdx = args.indexOf('--category');
+const singleCategory = catIdx !== -1 ? args[catIdx + 1] : undefined;
 
 if (!process.env.TURSO_WRITE_TOKEN && !isDryRun) {
   console.error('Error: TURSO_WRITE_TOKEN is required (or use --dry-run)');
@@ -576,10 +621,17 @@ if (!process.env.ANTHROPIC_API_KEY) {
 
 console.log('=== stacksherpa Agent Refresh ===');
 console.log(`Started at: ${new Date().toISOString()}`);
-console.log(`Mode: ${isFull ? 'full' : singleProvider ? `single (${singleProvider})` : 'refresh-all'}`);
+const modeLabel = isFull ? 'full' : singleProvider ? `single (${singleProvider})` : singleCategory ? `category (${singleCategory})` : isHighPriority ? 'high-priority categories' : 'refresh-all';
+console.log(`Mode: ${modeLabel}`);
 if (isDryRun) console.log('DRY RUN enabled');
 
-runAgentRefresh({ full: isFull, dryRun: isDryRun, provider: singleProvider })
+runAgentRefresh({
+  full: isFull,
+  dryRun: isDryRun,
+  provider: singleProvider,
+  category: singleCategory,
+  highPriorityOnly: isHighPriority,
+})
   .then(results => {
     const errors = results.filter(r => r.status === 'error');
     if (errors.length > 0) process.exit(1);

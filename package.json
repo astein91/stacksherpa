@@ -23,6 +23,7 @@
     "prepublishOnly": "tsc",
 
     "seed:turso": "tsx src/db/seed-turso.ts",
+    "seed:ai": "tsx src/cron/seed-ai-providers.ts",
 
     "cron:daily": "tsx src/cron/daily-update.ts",
     "cron:agent-refresh": "tsx src/cron/agent-refresh.ts",
