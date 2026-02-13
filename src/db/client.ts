@@ -7,12 +7,12 @@
  */
 
 import { createClient, type Client } from '@libsql/client';
-import { SCHEMA, type ProviderRow, type PricingRow, type KnownIssueRow } from './schema.js';
+import { SCHEMA, type ProviderRow, type PricingRow, type KnownIssueRow, type DiscoveryLogRow } from './schema.js';
 import type { KnownProvider, KnownIssue, PricingModel } from '../types.js';
 
 // Turso connection — defaults to shared read-only catalog
 const TURSO_URL = process.env.TURSO_DATABASE_URL ?? 'libsql://api-broker-astein91.aws-us-west-2.turso.io';
-const TURSO_READ_TOKEN = process.env.TURSO_AUTH_TOKEN ?? 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicm8iLCJpYXQiOjE3NzA5MTg3OTUsImlkIjoiYjA4YmZkNTUtZjhhNi00ODU5LThjNzMtYjg4NzIzMmI4YmYyIiwicmlkIjoiMWJjN2NhMTgtMDU1OC00NjI2LWJjY2YtOGVmMWIwZjQ1ZDAxIn0.aZ4gR9f0I9Qq8T_tkQp-uXwL-4LzUPGaGCDATirOFBBu9kHmuFs5cfXXJ162RzfX2Nrsn-HEAx_H8-uSSfiKBA';
+const TURSO_READ_TOKEN = process.env.TURSO_AUTH_TOKEN ?? '';
 const TURSO_WRITE_TOKEN = process.env.TURSO_WRITE_TOKEN;
 
 let client: Client | null = null;
@@ -622,6 +622,175 @@ export async function updateProviderMetadata(
     sql: `UPDATE providers SET ${setClauses.join(', ')} WHERE id = ?`,
     args,
   });
+}
+
+// ============================================
+// Discovery / Review Functions
+// ============================================
+
+/**
+ * Insert a discovered provider with ALL rich fields (requires write token).
+ * Uses ON CONFLICT DO NOTHING so it won't overwrite existing providers.
+ */
+export async function insertDiscoveredProviderFull(
+  provider: KnownProvider,
+  reviewStatus: 'approved' | 'pending' | 'rejected' = 'pending'
+): Promise<void> {
+  const db = getWriteClient();
+  const id = provider.id ?? provider.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  await db.execute({
+    sql: `
+      INSERT INTO providers (
+        id, name, description, category, subcategories, status, review_status,
+        website, docs_url, pricing_url, github_repo,
+        package, package_alt_names,
+        compliance, data_residency, self_hostable, on_prem_option,
+        strengths, weaknesses, best_for,
+        avoid_if, requires, best_when, alternatives,
+        ecosystem, updated_at, last_verified
+      ) VALUES (
+        ?, ?, ?, ?, ?, 'active', ?,
+        ?, ?, ?, ?,
+        ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, CURRENT_TIMESTAMP, ?
+      )
+      ON CONFLICT(id) DO NOTHING
+    `,
+    args: [
+      id,
+      provider.name,
+      provider.description ?? null,
+      provider.category ?? 'unknown',
+      JSON.stringify(provider.subcategories ?? []),
+      reviewStatus,
+      provider.website ?? null,
+      provider.docsUrl ?? null,
+      provider.pricingUrl ?? null,
+      provider.githubRepo ?? null,
+      provider.package ?? null,
+      JSON.stringify(provider.packageAltNames ?? {}),
+      JSON.stringify(provider.compliance ?? []),
+      JSON.stringify(provider.dataResidency ?? []),
+      provider.selfHostable ? 1 : 0,
+      provider.onPremOption ? 1 : 0,
+      JSON.stringify(provider.strengths ?? []),
+      JSON.stringify(provider.weaknesses ?? []),
+      JSON.stringify(provider.bestFor ?? provider.scale ?? []),
+      JSON.stringify(provider.avoidIf ?? []),
+      JSON.stringify(provider.requires ?? []),
+      JSON.stringify(provider.bestWhen ?? []),
+      JSON.stringify(provider.alternatives ?? []),
+      provider.ecosystem ?? null,
+      provider.lastVerified ?? null,
+    ],
+  });
+}
+
+/**
+ * Insert an entry into the discovery audit log (requires write token).
+ */
+export async function insertDiscoveryLog(entry: {
+  runId: string;
+  providerId?: string;
+  providerName: string;
+  category: string;
+  action: 'registered' | 'skipped' | 'approved' | 'rejected';
+  reason?: string;
+  fieldsJson?: string;
+}): Promise<void> {
+  const db = getWriteClient();
+  await db.execute({
+    sql: `
+      INSERT INTO discovery_log (run_id, provider_id, provider_name, category, action, reason, fields_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      entry.runId,
+      entry.providerId ?? null,
+      entry.providerName,
+      entry.category,
+      entry.action,
+      entry.reason ?? null,
+      entry.fieldsJson ?? null,
+    ],
+  });
+}
+
+/**
+ * Query the discovery audit log with optional filters.
+ */
+export async function getDiscoveryLog(filters?: {
+  runId?: string;
+  category?: string;
+  action?: string;
+  limit?: number;
+}): Promise<DiscoveryLogRow[]> {
+  const db = getClient();
+  const conditions: string[] = [];
+  const args: (string | number)[] = [];
+
+  if (filters?.runId) {
+    conditions.push('run_id = ?');
+    args.push(filters.runId);
+  }
+  if (filters?.category) {
+    conditions.push('category = ?');
+    args.push(filters.category);
+  }
+  if (filters?.action) {
+    conditions.push('action = ?');
+    args.push(filters.action);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = filters?.limit ?? 100;
+
+  const result = await db.execute({
+    sql: `SELECT * FROM discovery_log ${where} ORDER BY created_at DESC LIMIT ?`,
+    args: [...args, limit],
+  });
+
+  return result.rows as unknown as DiscoveryLogRow[];
+}
+
+/**
+ * Bulk update review_status for multiple providers and log each change (requires write token).
+ */
+export async function bulkUpdateReviewStatus(
+  updates: { id: string; status: 'approved' | 'rejected' }[],
+  runId: string,
+): Promise<void> {
+  const db = getWriteClient();
+
+  for (const { id, status } of updates) {
+    // Update the provider
+    await db.execute({
+      sql: `UPDATE providers SET review_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      args: [status, id],
+    });
+
+    // Get the provider name/category for the log
+    const result = await db.execute({
+      sql: `SELECT name, category FROM providers WHERE id = ?`,
+      args: [id],
+    });
+
+    const row = result.rows[0];
+    if (row) {
+      await insertDiscoveryLog({
+        runId,
+        providerId: id,
+        providerName: row.name as string,
+        category: row.category as string,
+        action: status,
+        reason: `Manual review via CLI`,
+      });
+    }
+  }
 }
 
 // ============================================

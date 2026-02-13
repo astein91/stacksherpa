@@ -254,6 +254,22 @@ ORDER BY
     WHEN 'medium' THEN 3
     ELSE 4
   END;
+
+-- Discovery audit log
+CREATE TABLE IF NOT EXISTS discovery_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  provider_id TEXT,
+  provider_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('registered', 'skipped', 'approved', 'rejected')),
+  reason TEXT,
+  fields_json TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_discovery_log_run ON discovery_log(run_id);
+CREATE INDEX IF NOT EXISTS idx_discovery_log_category ON discovery_log(category);
 `;
 
 // Helper type for JSON fields
@@ -305,6 +321,18 @@ export interface PricingRow {
   source_url: string | null;
   scraped_at: string;
   confidence: string;
+}
+
+export interface DiscoveryLogRow {
+  id: number;
+  run_id: string;
+  provider_id: string | null;
+  provider_name: string;
+  category: string;
+  action: 'registered' | 'skipped' | 'approved' | 'rejected';
+  reason: string | null;
+  fields_json: string | null;
+  created_at: string;
 }
 
 export interface KnownIssueRow {

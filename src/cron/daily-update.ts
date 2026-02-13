@@ -28,6 +28,8 @@ import { scrapePricing } from '../scrapers/sources/pricing.js';
 import { scrapeLMArena, scrapeArtificialAnalysis, modelNameMap } from '../scrapers/sources/benchmarks.js';
 import { discoverAndInsertAll } from '../scrapers/sources/discovery.js';
 import { refreshStaleProviderMetadata } from '../scrapers/sources/metadata-refresh.js';
+import { runAgentRefresh } from './agent-refresh.js';
+import { bootstrapAll } from './bootstrap-roster.js';
 
 interface UpdateResult {
   task: string;
@@ -275,6 +277,70 @@ async function refreshStaleMetadata(): Promise<UpdateResult> {
   }
 }
 
+async function runAgentProviderRefresh(): Promise<UpdateResult> {
+  const start = Date.now();
+
+  // Only run on Mondays (weekly)
+  const today = new Date().getDay();
+  if (today !== 1) {
+    console.log('  Skipping: only runs on Mondays');
+    return { task: 'agent_refresh', success: true, count: 0, duration: 0 };
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.log('  Skipping: ANTHROPIC_API_KEY not set');
+    return { task: 'agent_refresh', success: true, count: 0, duration: Date.now() - start };
+  }
+
+  try {
+    const refreshResults = await runAgentRefresh({ full: false, dryRun: false });
+    const updated = refreshResults.filter(r => r.status === 'updated').length;
+    return { task: 'agent_refresh', success: true, count: updated, duration: Date.now() - start };
+  } catch (error) {
+    return {
+      task: 'agent_refresh',
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration: Date.now() - start,
+    };
+  }
+}
+
+async function runBootstrapDiscovery(): Promise<UpdateResult> {
+  const start = Date.now();
+
+  // Only run on 1st of the month (monthly)
+  const dayOfMonth = new Date().getDate();
+  if (dayOfMonth !== 1) {
+    console.log('  Skipping: only runs on 1st of month');
+    return { task: 'bootstrap', success: true, count: 0, duration: 0 };
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.log('  Skipping: ANTHROPIC_API_KEY not set');
+    return { task: 'bootstrap', success: true, count: 0, duration: Date.now() - start };
+  }
+
+  if (!process.env.EXA_API_KEY) {
+    console.log('  Skipping: EXA_API_KEY not set');
+    return { task: 'bootstrap', success: true, count: 0, duration: Date.now() - start };
+  }
+
+  try {
+    console.log('  Running bootstrap discovery (monthly)...');
+    const results = await bootstrapAll({ dryRun: false });
+    const totalRegistered = results.reduce((s, r) => s + r.registered, 0);
+    return { task: 'bootstrap', success: true, count: totalRegistered, duration: Date.now() - start };
+  } catch (error) {
+    return {
+      task: 'bootstrap',
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration: Date.now() - start,
+    };
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -310,6 +376,14 @@ async function main() {
   // 5. Refresh stale metadata (daily)
   console.log('\n5. Metadata refresh...');
   results.push(await refreshStaleMetadata());
+
+  // 6. Agent-powered provider refresh (weekly, Mondays)
+  console.log('\n6. Agent provider refresh...');
+  results.push(await runAgentProviderRefresh());
+
+  // 7. Bootstrap discovery (monthly, 1st of month)
+  console.log('\n7. Bootstrap discovery...');
+  results.push(await runBootstrapDiscovery());
 
   // Summary
   console.log('\n=== Summary ===');
