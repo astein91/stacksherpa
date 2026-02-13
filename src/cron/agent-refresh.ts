@@ -367,7 +367,38 @@ This data changes rapidly and is the primary signal our recommendation engine us
     throw new Error('Haiku did not return tool_use response');
   }
 
-  return { profile: toolUse.input as SynthesizedProfile, tokensUsed };
+  const raw = toolUse.input as Record<string, unknown>;
+
+  // Validate required fields and types
+  if (raw.description !== undefined && typeof raw.description !== 'string') {
+    throw new Error('Haiku returned non-string description');
+  }
+  if (raw.strengths !== undefined && !Array.isArray(raw.strengths)) {
+    throw new Error('Haiku returned non-array strengths');
+  }
+  if (raw.bestFor !== undefined && !Array.isArray(raw.bestFor)) {
+    throw new Error('Haiku returned non-array bestFor');
+  }
+
+  // Sanitize: cap array lengths to prevent bloat
+  const profile: SynthesizedProfile = { ...raw } as SynthesizedProfile;
+  const arrayFields: (keyof SynthesizedProfile)[] = [
+    'strengths', 'weaknesses', 'bestFor', 'avoidIf', 'bestWhen',
+    'requires', 'alternatives', 'compliance', 'subcategories',
+  ];
+  for (const field of arrayFields) {
+    const val = profile[field];
+    if (Array.isArray(val) && val.length > 20) {
+      (profile as Record<string, unknown>)[field] = val.slice(0, 20);
+    }
+  }
+
+  // Cap description length
+  if (profile.description && profile.description.length > 1000) {
+    profile.description = profile.description.slice(0, 1000);
+  }
+
+  return { profile, tokensUsed };
 }
 
 // ============================================

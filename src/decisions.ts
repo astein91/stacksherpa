@@ -5,7 +5,7 @@
  * Local decisions.json is the canonical source of truth.
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { randomUUID } from 'crypto';
@@ -56,7 +56,18 @@ export async function loadProjectDecisions(projectDir: string): Promise<ProjectD
     }
 
     return data;
-  } catch {
+  } catch (err) {
+    // If file exists but is corrupted, back it up before returning empty
+    if (existsSync(path)) {
+      const backup = path + `.corrupt.${Date.now()}`;
+      try {
+        const raw = await readFile(path, 'utf-8');
+        await writeFile(backup, raw, 'utf-8');
+        console.error(`Corrupted decisions file backed up to: ${backup}`);
+      } catch {
+        // Backup failed, continue with empty decisions
+      }
+    }
     return createEmptyDecisions();
   }
 }
@@ -76,7 +87,9 @@ async function saveProjectDecisions(
   }
 
   decisions.updatedAt = new Date().toISOString();
-  await writeFile(path, JSON.stringify(decisions, null, 2), 'utf-8');
+  const tmp = path + '.tmp';
+  await writeFile(tmp, JSON.stringify(decisions, null, 2), 'utf-8');
+  await rename(tmp, path);
 }
 
 /**

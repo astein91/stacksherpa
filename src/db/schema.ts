@@ -198,10 +198,11 @@ INNER JOIN (
   GROUP BY provider_id
 ) latest ON p.provider_id = latest.provider_id AND p.scraped_at = latest.max_scraped;
 
--- View: Active issues (not resolved)
+-- View: Active issues (not resolved, reported within last 90 days)
 CREATE VIEW IF NOT EXISTS active_issues AS
 SELECT * FROM known_issues
 WHERE resolved_at IS NULL
+  AND (updated_at >= datetime('now', '-90 days') OR updated_at IS NULL)
 ORDER BY
   CASE severity
     WHEN 'critical' THEN 1
@@ -217,7 +218,7 @@ CREATE TABLE IF NOT EXISTS discovery_log (
   provider_id TEXT,
   provider_name TEXT NOT NULL,
   category TEXT NOT NULL,
-  action TEXT NOT NULL CHECK(action IN ('registered', 'skipped', 'approved', 'rejected')),
+  action TEXT NOT NULL CHECK(action IN ('registered', 'skipped', 'approved', 'rejected', 'auto-approved')),
   reason TEXT,
   fields_json TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP

@@ -526,8 +526,14 @@ async function bootstrapCategory(
   ];
 
   const MAX_TURNS = 15;
+  const MAX_TOKENS_PER_CATEGORY = 500_000; // ~$0.63 ceiling per category
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
+    if (result.tokensUsed >= MAX_TOKENS_PER_CATEGORY) {
+      console.log(`    [budget] Token ceiling reached (${result.tokensUsed.toLocaleString()} tokens), stopping category`);
+      result.summary = `Stopped: token budget exceeded (${result.tokensUsed.toLocaleString()} tokens)`;
+      return result;
+    }
     let response: Anthropic.Message;
     try {
       response = await anthropic.messages.create({

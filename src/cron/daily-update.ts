@@ -338,9 +338,25 @@ async function main() {
     }
   }
 
+  // Write machine-readable summary for CI/monitoring
+  const summary = {
+    timestamp: new Date().toISOString(),
+    tasks: results.map(r => ({
+      task: r.task,
+      success: r.success,
+      count: r.count ?? 0,
+      durationMs: r.duration,
+      error: r.error,
+    })),
+  };
+  console.log(`\n--- JSON Summary ---\n${JSON.stringify(summary)}`);
+
   const failed = results.filter(r => !r.success);
   if (failed.length > 0) {
-    console.log(`\n${failed.length} task(s) failed`);
+    console.error(`\n${failed.length} task(s) failed:`);
+    for (const f of failed) {
+      console.error(`  - ${f.task}: ${f.error}`);
+    }
     process.exit(1);
   }
 

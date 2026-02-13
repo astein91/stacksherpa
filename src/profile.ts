@@ -5,7 +5,7 @@
  * Implements explicit merge policies for combining global defaults with local overrides.
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { homedir } from 'os';
@@ -73,7 +73,9 @@ export async function saveGlobalDefaults(defaults: GlobalDefaults): Promise<void
   }
 
   defaults.updatedAt = new Date().toISOString();
-  await writeFile(path, JSON.stringify(defaults, null, 2), 'utf-8');
+  const tmp = path + '.tmp';
+  await writeFile(tmp, JSON.stringify(defaults, null, 2), 'utf-8');
+  await rename(tmp, path);
 }
 
 export async function loadLocalProfile(projectDir: string): Promise<ProjectProfile | null> {
@@ -111,7 +113,9 @@ export async function saveLocalProfile(
   }
 
   profile.updatedAt = new Date().toISOString();
-  await writeFile(path, JSON.stringify(profile, null, 2), 'utf-8');
+  const tmp = path + '.tmp';
+  await writeFile(tmp, JSON.stringify(profile, null, 2), 'utf-8');
+  await rename(tmp, path);
 }
 
 // ============================================

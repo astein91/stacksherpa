@@ -214,9 +214,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   const queue = await getUpdateQueue();
   if (queue.length > 0) {
-    console.log('\n📋 Update Queue:');
+    console.log('\nUpdate Queue:');
     for (const item of queue.slice(0, 5)) {
       console.log(`  [${item.priority}] ${item.providerId}: ${item.fields.join(', ')}`);
     }
+  }
+
+  // Exit with non-zero if critical freshness SLA violations exist
+  if (result.critical.length > 0) {
+    process.exit(1);
   }
 }

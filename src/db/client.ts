@@ -268,7 +268,7 @@ export async function getStaleProviders(daysSinceUpdate: number = 30): Promise<P
     sql: `
       SELECT * FROM providers
       WHERE last_verified < ? OR last_verified IS NULL
-      ORDER BY last_verified ASC NULLS FIRST
+      ORDER BY CASE WHEN last_verified IS NULL THEN 0 ELSE 1 END, last_verified ASC
     `,
     args: [cutoff],
   });

@@ -89,19 +89,6 @@ export interface ProviderDetail {
     severity: string;
     githubIssue?: string;
   }[];
-  aiBenchmarks?: {
-    lmArena?: { elo: number; rank?: number; category?: string };
-    artificialAnalysis?: {
-      qualityIndex?: number;
-      speedIndex?: number;
-      pricePerMToken?: number;
-      tokensPerSecond?: number;
-      ttft?: number;
-    };
-    contextWindow?: { maxTokens: number; effectiveTokens?: number };
-    capabilities?: Record<string, boolean>;
-    benchmarks?: { name: string; score: number; maxScore?: number }[];
-  };
 }
 
 // ---- queries ----
@@ -243,46 +230,6 @@ export async function getProviderDetail(
     severity: (i.severity as string) ?? "low",
     githubIssue: str(i.github_issue_url),
   }));
-
-  // AI benchmarks
-  if (r.category === "ai") {
-    const benchResult = await db.execute({
-      sql: `SELECT * FROM latest_ai_benchmarks WHERE provider_id = ?`,
-      args: [providerId],
-    });
-
-    if (benchResult.rows.length > 0) {
-      const b = benchResult.rows[0];
-      detail.aiBenchmarks = {
-        lmArena: b.lmarena_elo
-          ? {
-              elo: Number(b.lmarena_elo),
-              rank: b.lmarena_rank ? Number(b.lmarena_rank) : undefined,
-              category: str(b.lmarena_category),
-            }
-          : undefined,
-        artificialAnalysis: b.aa_quality_index
-          ? {
-              qualityIndex: Number(b.aa_quality_index),
-              speedIndex: b.aa_speed_index ? Number(b.aa_speed_index) : undefined,
-              pricePerMToken: b.aa_price_per_m_token ? Number(b.aa_price_per_m_token) : undefined,
-              tokensPerSecond: b.aa_tokens_per_second ? Number(b.aa_tokens_per_second) : undefined,
-              ttft: b.aa_ttft_ms ? Number(b.aa_ttft_ms) : undefined,
-            }
-          : undefined,
-        contextWindow: b.context_max_tokens
-          ? {
-              maxTokens: Number(b.context_max_tokens),
-              effectiveTokens: b.context_effective_tokens
-                ? Number(b.context_effective_tokens)
-                : undefined,
-            }
-          : undefined,
-        capabilities: parseJson(b.capabilities),
-        benchmarks: parseJson(b.benchmarks),
-      };
-    }
-  }
 
   return detail;
 }

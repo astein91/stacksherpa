@@ -503,7 +503,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
-  throw new Error(`Unknown tool: ${name}`);
+  return {
+    content: [{ type: 'text', text: JSON.stringify({ error: `Unknown tool: ${name}` }) }],
+    isError: true,
+  };
 });
 
 // ============================================
