@@ -62,18 +62,34 @@ All commands output JSON. Add `--pretty` for human-readable formatting.
 
 ## Claude Code integration
 
-Add to your project's `CLAUDE.md` or install the skill:
+Install the skill so Claude automatically consults stacksherpa whenever you need an API:
+
+```bash
+# Install globally (works in all your projects)
+mkdir -p ~/.claude/skills/api-selection
+curl -sL https://raw.githubusercontent.com/astein91/stacksherpa/main/skills/api-selection/SKILL.md \
+  -o ~/.claude/skills/api-selection/SKILL.md
+```
+
+Or install per-project:
+
+```bash
+mkdir -p .claude/skills/api-selection
+curl -sL https://raw.githubusercontent.com/astein91/stacksherpa/main/skills/api-selection/SKILL.md \
+  -o .claude/skills/api-selection/SKILL.md
+```
+
+That's it. Claude will now silently run `stacksherpa providers <category>` before suggesting any API integration. No slash command needed — the skill triggers automatically.
+
+**Alternative:** If you prefer not to install the skill, just add this to your project's `CLAUDE.md`:
 
 ```markdown
 ## API Selection
-
-When implementing features that require external APIs or services:
+When implementing features that require external APIs:
 1. Run `stacksherpa providers <category>` via Bash before choosing a provider
 2. Pick the best match based on the returned profile, pricing, and issues
 3. After integration, run `stacksherpa decide --api X --category Y --outcome positive`
 ```
-
-Claude will automatically consult stacksherpa when you ask it to add email, payments, auth, or any other API integration.
 
 ## Categories (28)
 
