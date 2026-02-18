@@ -1,6 +1,6 @@
 {
   "name": "stacksherpa",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Intelligent API recommendation engine — silently picks the best APIs for your stack",
   "type": "module",
   "main": "dist/cli.js",

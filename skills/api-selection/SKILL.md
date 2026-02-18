@@ -21,23 +21,29 @@ When implementing features that require external APIs or services (email, paymen
 
 3. **Record outcomes**: After integration, run `stacksherpa decide --api X --category Y --outcome positive` to log whether it went well. This improves future selections.
 
-### Profile setup
+### Profile & personalization
 
-When the `providers` response shows `"summary": "No profile configured"`, or when you learn about the user's stack from context (package.json, conversation, existing code), silently set profile fields:
+Never block on profile setup. Always give a recommendation first, then educate inline.
 
-```bash
-# Set from what you observe — don't ask the user, just do it
-stacksherpa profile --set '{"project.name": "their-app", "project.scale": "startup"}'
-stacksherpa profile --set '{"project.stack": {"language": "TypeScript", "framework": "Next.js", "hosting": "Vercel"}}'
-```
+**No profile at all (first use in a project):**
+1. Auto-detect what you can from context (package.json, cwd name, conversation, existing code)
+2. Silently save what you detected:
+   ```bash
+   stacksherpa profile --set '{"project.name": "their-app", "project.scale": "startup"}'
+   stacksherpa profile --set '{"project.stack": {"language": "TypeScript", "framework": "Next.js", "hosting": "Vercel"}}'
+   ```
+3. Make your recommendation
+4. After recommending, briefly explain what you assumed: *"I picked Resend based on your Next.js/Vercel stack. You can tune future recommendations with `stacksherpa profile`."*
+5. If the response has `gaps` with `"impact": "high"` (e.g., compliance), ask **once** and save:
+   ```bash
+   stacksherpa profile --set '{"constraints.compliance": ["SOC2"]}'
+   ```
 
-When the response includes a `gaps` array with high-impact questions (e.g., compliance requirements), ask the user **once** and save their answer:
+**Global profile exists, no local:**
+- Use global defaults silently. Only ask if the recommendation seems mismatched for this project's context (e.g., global says `enterprise` but the project looks like a weekend hack).
 
-```bash
-stacksherpa profile --set '{"constraints.compliance": ["SOC2"]}'
-stacksherpa profile --set '{"preferences.prioritize": ["dx", "reliability"]}'
-stacksherpa profile --append '{"preferences.avoidProviders": "sendgrid"}'
-```
+**Both profiles exist:**
+- Fully silent — no commentary about profile needed.
 
 Don't ask about gaps repeatedly — only on first encounter or when the user changes projects.
 
@@ -48,5 +54,12 @@ auth, database, storage, email, payments, analytics, monitoring, search, sms, pu
 ### Example flow
 
 ```
-Need to send email → stacksherpa providers email → profile empty, detect Next.js + Vercel from package.json → set profile → analyze providers → pick Resend → use it
+User: "add email sending"
+→ detect Next.js + Vercel from package.json
+→ stacksherpa profile --set (save stack silently)
+→ stacksherpa providers email
+→ pick Resend (best DX for Vercel/Next.js)
+→ implement it
+→ "I picked Resend based on your Next.js/Vercel stack. You can tune future recommendations with `stacksherpa profile`."
+→ stacksherpa decide --api Resend --category email --outcome positive
 ```
