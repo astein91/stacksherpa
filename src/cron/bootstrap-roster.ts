@@ -32,16 +32,15 @@ import {
 import { categoryAliases } from '../categories.js';
 import type { KnownProvider } from '../types.js';
 
-// All canonical categories
+// All canonical categories (28)
 const CATEGORIES = [
-  'email', 'payments', 'auth', 'sms', 'storage',
-  'database', 'analytics', 'search', 'monitoring', 'ai',
-  'push', 'financial-data', 'prediction-markets', 'trading',
-  'secrets', 'rate-limiting', 'maps', 'video', 'scheduling', 'jobs',
-  'vector-db', 'ai-orchestration', 'document-processing', 'ai-memory',
-  'integrations', 'webhooks', 'api-gateway', 'audit-logging',
-  'ai-audio', 'ai-video', 'ai-image',
-  'feature-flags', 'message-queue', 'cache-kv', 'realtime',
+  'auth', 'database', 'storage', 'email', 'payments', 'analytics', 'monitoring', 'search',
+  'sms', 'push', 'realtime', 'chat',
+  'ai', 'ai-audio', 'ai-video', 'ai-image', 'vector-db',
+  'cache', 'jobs', 'message-queue', 'hosting', 'cdn', 'feature-flags',
+  'cms', 'media', 'maps',
+  'web-search',
+  'finance',
 ];
 
 // Category descriptions to prevent misinterpretation by the agent
@@ -54,33 +53,26 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   'database': 'Managed database platforms with developer APIs (PlanetScale, Neon, Supabase). NOT ORMs or query builders.',
   'analytics': 'Product analytics, event tracking, and user behavior APIs (PostHog, Mixpanel, Amplitude). NOT web analytics or SEO.',
   'search': 'Full-text search and search-as-a-service APIs (Algolia, Meilisearch, Typesense). NOT web search engines.',
-  'monitoring': 'Error tracking, APM, logging, and observability platforms (Sentry, Datadog, Axiom). NOT uptime monitors.',
-  'ai': 'LLM and AI model API platforms (OpenAI, Anthropic, Google AI). NOT AI-specific tooling or frameworks.',
+  'monitoring': 'Error tracking, APM, logging, observability, and audit trail platforms (Sentry, Datadog, Axiom, WorkOS Audit Logs). NOT uptime monitors.',
+  'ai': 'LLM and AI model API platforms, including orchestration frameworks, agent memory, and document processing (OpenAI, Anthropic, Google AI, LangChain, Mem0, Unstructured). NOT standalone vector databases (that is "vector-db").',
   'push': 'Push notification delivery APIs (OneSignal, Firebase Cloud Messaging). NOT email or SMS.',
-  'financial-data': 'Market data, stock prices, and financial information APIs (Polygon.io, Alpha Vantage). NOT trading execution.',
-  'prediction-markets': 'Prediction market and event contract APIs (Polymarket, Kalshi). NOT sports betting or gambling.',
-  'trading': 'Programmatic trade execution APIs and brokerage platforms (Alpaca, Interactive Brokers). NOT job marketplaces or financial data feeds.',
-  'secrets': 'Secret management, env var storage, and key vaults (Doppler, Infisical, HashiCorp Vault). NOT password managers.',
-  'rate-limiting': 'Rate limiting and throttling APIs/services (Upstash, Arcjet). NOT API gateways.',
+  'finance': 'Market data, stock prices, financial information, and programmatic trade execution APIs (Polygon.io, Alpha Vantage, Alpaca, Interactive Brokers). NOT payment processing (that is "payments").',
   'maps': 'Geocoding, mapping, and location APIs (Mapbox, Google Maps, HERE). NOT navigation apps.',
-  'video': 'Video hosting, streaming, and processing infrastructure (Mux, Cloudflare Stream). NOT AI video generation (that is "ai-video").',
-  'scheduling': 'Calendar, booking, and appointment scheduling APIs (Calendly, Cal.com). NOT cron/job scheduling (that is "jobs").',
   'jobs': 'Background job processing, task queues, and worker infrastructure (BullMQ, Inngest, Trigger.dev). NOT recruitment, hiring, or job boards.',
   'vector-db': 'Vector databases and embedding storage (Pinecone, Weaviate, Qdrant). NOT traditional databases.',
-  'ai-orchestration': 'AI agent frameworks and LLM orchestration tools (LangChain, CrewAI, Vercel AI SDK). NOT raw LLM APIs (that is "ai").',
-  'document-processing': 'Document parsing, extraction, and chunking APIs (Unstructured, LlamaParse). NOT document editors.',
-  'ai-memory': 'Long-term memory and context management for AI agents (Mem0, Zep). NOT databases or caches.',
-  'integrations': 'Unified APIs connecting to multiple SaaS services (CRM, HRIS, accounting). NOT general API tools.',
-  'webhooks': 'Webhook delivery, management, and infrastructure (Svix, Hookdeck). NOT general HTTP APIs.',
-  'api-gateway': 'API gateway, management, and proxy platforms (Kong, Zuplo). NOT CDNs.',
-  'audit-logging': 'Audit trail, compliance logging, and governance APIs (WorkOS Audit Logs, Retraced). NOT general logging (that is "monitoring").',
   'ai-audio': 'Text-to-speech, speech-to-text, and audio generation APIs (ElevenLabs, Deepgram, AssemblyAI). NOT music streaming.',
-  'ai-video': 'AI video generation and text-to-video APIs (Runway, Luma, Kling). NOT video hosting (that is "video").',
+  'ai-video': 'AI video generation and text-to-video APIs (Runway, Luma, Kling). NOT video hosting (that is "media").',
   'ai-image': 'AI image generation and text-to-image APIs (Midjourney, DALL-E, Stability AI). NOT image hosting.',
   'feature-flags': 'Feature flag and A/B testing platforms (LaunchDarkly, Statsig, Flagsmith). NOT analytics.',
   'message-queue': 'Message queue and event streaming platforms (Upstash Kafka, RabbitMQ, AWS SQS). NOT push notifications.',
-  'cache-kv': 'Cache and key-value store APIs (Upstash Redis, Momento, DynamoDB). NOT databases.',
+  'cache': 'Cache and key-value store APIs (Upstash Redis, Momento, DynamoDB). NOT databases.',
   'realtime': 'Realtime communication infrastructure (Ably, Pusher, Liveblocks). NOT video calling.',
+  'chat': 'In-app chat and live messaging APIs (Stream Chat, Sendbird, TalkJS). NOT SMS or email.',
+  'hosting': 'App hosting, deployment, and PaaS platforms (Vercel, Railway, Fly.io, Render). NOT raw IaaS or VMs.',
+  'cdn': 'Content delivery networks and edge platforms (Cloudflare, Fastly, KeyCDN). NOT hosting platforms.',
+  'cms': 'Headless CMS and content management APIs (Sanity, Contentful, Strapi). NOT website builders.',
+  'media': 'Media processing, video hosting, streaming, and image optimization (Mux, Cloudflare Stream, Imgix, Cloudinary). NOT AI generation (that is "ai-image" or "ai-video").',
+  'web-search': 'Web search, SERP, and web scraping APIs (Exa, SerpApi, Firecrawl, Apify). NOT full-text search for apps (that is "search").',
 };
 
 // Domains that indicate a blog/news/aggregator site rather than a real provider

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 /**
+ * @deprecated Use src/cli.ts instead. This MCP server is kept for backward
+ * compatibility and can be invoked via `stacksherpa --mcp` or `npm run start:mcp`.
+ *
  * API Broker MCP Server (v3)
  *
  * Pure data provider — returns all providers, profile, and history.

@@ -38,7 +38,7 @@ import { bootstrapAll } from './bootstrap-roster.js';
 
 /** Categories where data changes fast and descriptions need frequent refresh */
 export const FAST_REFRESH_CATEGORIES = new Set([
-  'ai', 'ai-orchestration', 'ai-audio', 'ai-video', 'ai-image',
+  'ai', 'ai-audio', 'ai-video', 'ai-image',
 ]);
 
 /** Truncation limit for website scraping — AI categories get more context */

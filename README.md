@@ -1,118 +1,106 @@
 # stacksherpa
 
-Intelligent API recommendation engine for Claude Code. When you need an external API, stacksherpa silently picks the best one for your stack — no research required.
+Intelligent API recommendation engine. When you need an external API, stacksherpa picks the best one for your stack — with pricing, known issues, compliance data, and real GitHub issue tracking.
 
-**450+ providers across 35 categories** &middot; **[Browse the catalog](https://stacksherpa.vercel.app)**
+**450+ providers across 28 categories** &middot; **[Browse the catalog →](https://stacksherpa.vercel.app)**
 
 ---
 
-## Quick start
+## Browse
 
-### Option 1: Claude Code skill (recommended)
+Visit **[stacksherpa.vercel.app](https://stacksherpa.vercel.app)** to explore the full provider catalog — filter by category, compare providers, see pricing and known issues.
 
-Install the skill directly from npm — Claude will automatically consult stacksherpa whenever you need an API:
+## Install the CLI
 
 ```bash
-claude mcp add stacksherpa -- npx -y stacksherpa
+npm install -g stacksherpa
 ```
 
-### Option 2: Manual MCP config
+Or run without installing:
 
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "stacksherpa": {
-      "command": "npx",
-      "args": ["-y", "stacksherpa"]
-    }
-  }
-}
+```bash
+npx stacksherpa providers email --pretty
 ```
 
-### Option 3: Project-level config
+**No API keys needed.** The provider catalog is hosted on a shared read-only database.
 
-Add to your project's `.mcp.json` to share with your team:
+## CLI usage
 
-```json
-{
-  "mcpServers": {
-    "stacksherpa": {
-      "command": "npx",
-      "args": ["-y", "stacksherpa"]
-    }
-  }
-}
+```bash
+# Browse categories
+stacksherpa categories --pretty
+
+# See all providers in a category (with pricing, issues, compliance)
+stacksherpa providers email --pretty
+stacksherpa providers database --pretty
+stacksherpa providers ai --pretty
+
+# Deep-dive on a specific provider
+stacksherpa provider stripe --pretty
+stacksherpa provider resend --pretty
+
+# View/update your project profile
+stacksherpa profile --pretty
+stacksherpa profile --set '{"project.name": "my-app", "project.scale": "startup"}'
+stacksherpa profile --set '{"constraints.compliance": ["SOC2"]}'
+stacksherpa profile --append '{"preferences.avoidProviders": "sendgrid"}'
+
+# Record what you chose (improves future recommendations)
+stacksherpa decide --api Resend --category email --outcome positive
+stacksherpa decide --api SendGrid --category email --outcome negative --notes "TypeScript types broken"
+
+# Report how the integration went
+stacksherpa report --id <decision-id> --success
+stacksherpa report --id <decision-id> --failure --stage build --notes "SDK didn't support ESM"
+
+# Manage project registry
+stacksherpa projects list --pretty
+stacksherpa projects prune
 ```
 
-**No API keys needed.** The provider catalog is hosted on a shared read-only database. Just install and go.
+All commands output JSON. Add `--pretty` for human-readable formatting.
 
----
+## Claude Code integration
 
-## What it does
+Add to your project's `CLAUDE.md` or install the skill:
 
-When you ask Claude to build something that needs an external API (email, payments, auth, etc.), stacksherpa:
+```markdown
+## API Selection
 
-1. Looks up all providers in the relevant category from a shared database
-2. Evaluates them against your project profile — stack, scale, compliance, budget
-3. Factors in taste learned from your past decisions across all projects
-4. Returns the best match with confidence level and rationale
-
-Claude uses the recommendation silently — you just get the right API without having to research it.
-
-## How it works
-
-**Recommendation factors:**
-
-- **Compliance gate** — SOC2, HIPAA, GDPR, PCI-DSS requirements eliminate non-compliant providers
-- **Scale fit** — hobby, startup, growth, enterprise
-- **Strength alignment** — matches your priorities (DX, reliability, cost, performance, support)
-- **Ecosystem affinity** — prefers providers in ecosystems you already use (Supabase, AWS, Vercel, etc.)
-- **Past experience** — positive/negative outcomes across all your projects
-- **Known issues** — flags providers with active critical bugs from GitHub
-
-**Categories:**
-
-email, payments, auth, sms, storage, database, analytics, search, monitoring, ai, push, financial-data, prediction-markets, trading, secrets, rate-limiting, maps, video, scheduling, jobs, vector-db, ai-orchestration, document-processing, ai-memory, integrations, webhooks, api-gateway, audit-logging, ai-audio, ai-video, ai-image, feature-flags, message-queue, cache-kv, realtime
-
-## MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `recommend` | Get instant recommendation for a category |
-| `get_profile` | View merged project profile + cross-project taste |
-| `update_project_profile` | Surgical profile updates (set/append/remove) |
-| `record_decision` | Record an API selection outcome |
-| `get_provider` | Detailed provider info with pricing, issues, benchmarks |
-| `list_categories` | All categories with provider counts |
-| `get_search_strategy` | Tailored search queries for deeper research |
-| `report_outcome` | Report integration success/failure for learning loop |
-| `manage_projects` | List, update, or prune registered projects |
-
-## Data architecture
-
-```
-Turso (shared, read-only for clients)
-  providers      — 450+ providers with rich metadata
-  pricing        — versioned pricing snapshots
-  known_issues   — scraped from GitHub (reactions, severity)
-  discovery_log  — audit trail of bootstrap runs
-
-Local (~/.stacksherpa/)
-  profile.json   — your project constraints & preferences
-  decisions.json — your API selection history
-  defaults.json  — global defaults across all projects
-  registry.json  — project registry for cross-project taste
+When implementing features that require external APIs or services:
+1. Run `stacksherpa providers <category>` via Bash before choosing a provider
+2. Pick the best match based on the returned profile, pricing, and issues
+3. After integration, run `stacksherpa decide --api X --category Y --outcome positive`
 ```
 
-Client data never leaves your machine. The Turso catalog is read-only from MCP clients.
+Claude will automatically consult stacksherpa when you ask it to add email, payments, auth, or any other API integration.
 
-## Configuration
+## Categories (28)
 
-### Project profile
+| Group | Categories |
+|-------|-----------|
+| **Core** | auth, database, storage, email, payments, analytics, monitoring, search |
+| **Messaging** | sms, push, realtime, chat |
+| **AI** | ai, ai-audio, ai-video, ai-image, vector-db |
+| **Infrastructure** | cache, jobs, message-queue, hosting, cdn, feature-flags |
+| **Content & data** | cms, media, maps, web-search, finance |
 
-Create `.stacksherpa/profile.json` in your project root:
+## What each provider includes
+
+- Description, website, docs URL, pricing URL
+- Strengths (dx, reliability, cost, performance, support, security, customization)
+- Best for (hobby / startup / growth / enterprise)
+- Avoid if / best when (concrete conditions)
+- Alternatives (linked provider IDs)
+- Compliance certs (SOC2, HIPAA, GDPR, PCI-DSS, ISO27001)
+- Ecosystem affinity (vercel, supabase, aws, cloudflare, etc.)
+- Self-hostable flag
+- **Live pricing** — scraped from provider websites
+- **Known issues** — scraped from GitHub (reactions, severity, workarounds)
+
+## Project profile
+
+Create `.stacksherpa/profile.json` in your project root to personalize recommendations:
 
 ```json
 {
@@ -132,50 +120,50 @@ Create `.stacksherpa/profile.json` in your project root:
 }
 ```
 
-Or let Claude update it for you — it calls `update_project_profile` automatically when it learns about your stack.
+Global defaults in `~/.stacksherpa/defaults.json` apply to all projects (local profiles override).
 
-### Global defaults
+## Data architecture
 
-Set defaults for all projects in `~/.stacksherpa/defaults.json`. Local project profiles merge with globals (arrays union, scalars override).
+```
+Turso (shared, read-only for CLI clients)
+  providers      — 450+ providers with rich metadata
+  pricing        — versioned pricing snapshots
+  known_issues   — scraped from GitHub (reactions, severity)
+  discovery_log  — audit trail of bootstrap runs
+
+Local (~/.stacksherpa/)
+  defaults.json  — global defaults across all projects
+
+Local (<project>/.stacksherpa/)
+  profile.json   — project constraints & preferences
+  decisions.json — API selection history
+```
+
+Your data never leaves your machine. The Turso catalog is read-only.
+
+---
 
 ## Keeping the catalog fresh
 
 The catalog is maintained by an agentic pipeline — no manual data entry.
-
-### Daily cron (`npm run cron:daily`)
-
-Runs on a schedule (GitHub Actions or manually):
 
 | Step | Schedule | What it does |
 |------|----------|--------------|
 | GitHub issues | Every run | Scrapes issues with 2+ reactions from provider repos |
 | Pricing | Every run | Re-scrapes up to 3 stale providers via Firecrawl |
 | Discovery | 1st & 15th | Finds new providers via Exa search |
-| Metadata refresh | Every run | Re-scrapes 2 stale provider websites |
-| Agent refresh | Daily (AI categories), Mondays (all) | Claude Haiku re-evaluates provider profiles with live web data |
-| Bootstrap | 1st of month | Full agentic discovery across all 35 categories |
+| Agent refresh | Daily (AI), Mondays (all) | Claude Haiku re-evaluates provider profiles with live web data |
+| Bootstrap | 1st of month | Full agentic discovery across all 28 categories |
 
-### Bootstrap pipeline (`npm run cron:bootstrap`)
-
-An AI agent (Claude Haiku + Exa search + Firecrawl) autonomously discovers new providers:
-
-1. Checks existing providers in each category
-2. Searches for comparison articles and recent launches
-3. Scrapes each candidate's website for accurate details
-4. Validates against category definitions and blocked domains
-5. Auto-approves providers passing quality gate (description >100 chars, website, docs URL, 2+ strengths); otherwise inserts as `pending`
-
-Providers that don't pass auto-approval require manual review:
+### Provider review
 
 ```bash
-npm run cron:review -- --list                    # See what's pending
-npm run cron:review -- --approve pinecone qdrant # Approve specific providers
-npm run cron:review -- --approve-category jobs   # Approve an entire category
+npm run cron:review -- --list                    # See pending providers
+npm run cron:review -- --approve pinecone qdrant # Approve specific ones
 npm run cron:review -- --reject some-blog        # Reject bad entries
-npm run cron:review -- --log                     # View audit trail
 ```
 
-### Environment variables
+### Environment variables (for maintainers)
 
 | Variable | Required for | Purpose |
 |----------|-------------|---------|
@@ -186,41 +174,15 @@ npm run cron:review -- --log                     # View audit trail
 | `FIRECRAWL_API_KEY` | Pricing, metadata | Website scraping |
 | `GITHUB_TOKEN` | Issue scraping | Higher rate limits for GitHub API |
 
-## Web app
-
-The `web/` directory contains a Next.js app for browsing the provider catalog. It reads directly from Turso (read-only) and shows only approved providers.
-
-```bash
-cd web
-npm install
-npm run dev    # http://localhost:3000
-```
-
-Deployed to Vercel with `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` environment variables.
-
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Type-check
-npm run build
-
-# Run MCP server locally
-npm run dev
-
-# Run tests
-npm test
-
-# Seed/migrate Turso schema
-TURSO_WRITE_TOKEN=... npm run seed:turso
-
-# Bootstrap a single category (dry run)
-npm run cron:bootstrap -- --category jobs --dry-run
-
-# Full agent refresh
-npm run cron:agent-refresh -- --full
+npm run build                                     # Type-check
+npm run dev -- providers email --pretty            # Run CLI locally
+npm test                                           # Run tests
+npm run cron:bootstrap -- --category jobs --dry-run # Bootstrap one category
+npm run cron:agent-refresh -- --full               # Full agent refresh
 ```
 
 ## License

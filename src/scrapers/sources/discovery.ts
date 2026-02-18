@@ -104,6 +104,169 @@ export const discoveryConfigs: DiscoveryConfig[] = [
     ],
     excludeDomains: ['twilio.com', 'messagebird.com', 'vonage.com'],
   },
+  {
+    category: 'push',
+    queries: [
+      'new push notification API 2024 2025',
+      'OneSignal Firebase alternative push notifications',
+      'push notification service developer',
+    ],
+    excludeDomains: ['onesignal.com', 'firebase.google.com'],
+  },
+  {
+    category: 'realtime',
+    queries: [
+      'new realtime API websocket 2024 2025',
+      'Pusher Ably alternative realtime',
+      'websocket service developer API',
+    ],
+    excludeDomains: ['pusher.com', 'ably.com', 'liveblocks.io'],
+  },
+  {
+    category: 'vector-db',
+    queries: [
+      'new vector database API 2024 2025',
+      'Pinecone Weaviate alternative vector',
+      'vector database startup launched',
+    ],
+    excludeDomains: ['pinecone.io', 'weaviate.io', 'qdrant.tech'],
+  },
+  {
+    category: 'ai-audio',
+    queries: [
+      'new text to speech API 2024 2025',
+      'ElevenLabs alternative TTS API',
+      'speech to text API developer launched',
+    ],
+    excludeDomains: ['elevenlabs.io', 'deepgram.com', 'assemblyai.com'],
+  },
+  {
+    category: 'ai-video',
+    queries: [
+      'new AI video generation API 2024 2025',
+      'Runway alternative video generation',
+      'text to video API developer',
+    ],
+    excludeDomains: ['runwayml.com', 'lumalabs.ai'],
+  },
+  {
+    category: 'ai-image',
+    queries: [
+      'new AI image generation API 2024 2025',
+      'DALL-E Midjourney alternative image API',
+      'text to image API developer launched',
+    ],
+    excludeDomains: ['openai.com', 'stability.ai'],
+  },
+  {
+    category: 'feature-flags',
+    queries: [
+      'new feature flag service 2024 2025',
+      'LaunchDarkly alternative feature flags',
+      'feature flag A/B testing API',
+    ],
+    excludeDomains: ['launchdarkly.com', 'statsig.com', 'flagsmith.com'],
+  },
+  {
+    category: 'message-queue',
+    queries: [
+      'new message queue API 2024 2025',
+      'managed Kafka RabbitMQ alternative',
+      'message broker developer service launched',
+    ],
+    excludeDomains: ['upstash.com', 'confluent.io'],
+  },
+  {
+    category: 'cache',
+    queries: [
+      'new cache key-value API 2024 2025',
+      'Upstash Redis alternative cache',
+      'managed Redis cache developer service',
+    ],
+    excludeDomains: ['upstash.com', 'momento.com'],
+  },
+  {
+    category: 'jobs',
+    queries: [
+      'new background job queue API 2024 2025',
+      'Inngest Trigger.dev alternative background jobs',
+      'task queue worker service developer',
+    ],
+    excludeDomains: ['inngest.com', 'trigger.dev'],
+  },
+  {
+    category: 'maps',
+    queries: [
+      'new geocoding mapping API 2024 2025',
+      'Mapbox Google Maps alternative developer',
+      'location geocoding API startup',
+    ],
+    excludeDomains: ['mapbox.com', 'here.com'],
+  },
+  {
+    category: 'chat',
+    queries: [
+      'new in-app chat API 2024 2025',
+      'Stream Chat Sendbird alternative messaging',
+      'live chat API developer launched',
+    ],
+    excludeDomains: ['getstream.io', 'sendbird.com'],
+  },
+  {
+    category: 'hosting',
+    queries: [
+      'new app hosting PaaS 2024 2025',
+      'Vercel Railway alternative deployment',
+      'developer hosting platform launched',
+    ],
+    excludeDomains: ['vercel.com', 'railway.app', 'fly.io', 'render.com'],
+  },
+  {
+    category: 'cdn',
+    queries: [
+      'new CDN service 2024 2025',
+      'Cloudflare Fastly alternative CDN',
+      'content delivery network developer API',
+    ],
+    excludeDomains: ['cloudflare.com', 'fastly.com'],
+  },
+  {
+    category: 'cms',
+    queries: [
+      'new headless CMS API 2024 2025',
+      'Sanity Contentful alternative CMS',
+      'headless CMS developer startup launched',
+    ],
+    excludeDomains: ['sanity.io', 'contentful.com', 'strapi.io'],
+  },
+  {
+    category: 'media',
+    queries: [
+      'new media processing API 2024 2025',
+      'Mux Cloudinary alternative media',
+      'video hosting image optimization API developer',
+    ],
+    excludeDomains: ['mux.com', 'cloudinary.com', 'imgix.com'],
+  },
+  {
+    category: 'web-search',
+    queries: [
+      'new web search API SERP 2024 2025',
+      'Exa SerpApi alternative web search',
+      'web scraping search API developer launched',
+    ],
+    excludeDomains: ['exa.ai', 'serpapi.com', 'firecrawl.dev'],
+  },
+  {
+    category: 'finance',
+    queries: [
+      'new financial data API 2024 2025',
+      'Polygon.io Alpha Vantage alternative market data',
+      'stock trading API brokerage developer',
+      'financial market API startup launched',
+    ],
+    excludeDomains: ['polygon.io', 'alphavantage.co', 'alpaca.markets'],
+  },
 ];
 
 export async function discoverNewAPIs(

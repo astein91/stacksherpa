@@ -2,123 +2,118 @@
  * Category Aliases
  *
  * Maps alternative category names to canonical category IDs.
- * Extracted from knowledge.ts so runtime code (server.ts)
- * doesn't need to import the full knowledge base.
+ * 28 canonical categories as of 2026-02.
  */
 
 export const categoryAliases: Record<string, string> = {
+  // email
   'transactional email': 'email',
   'transactional-email': 'email',
   mail: 'email',
   smtp: 'email',
+
+  // payments
   payment: 'payments',
   'payment processing': 'payments',
   billing: 'payments',
   subscriptions: 'payments',
+
+  // auth
   authentication: 'auth',
   login: 'auth',
   'user management': 'auth',
   identity: 'auth',
+
+  // sms
   texting: 'sms',
   messaging: 'sms',
+
+  // storage
   'file storage': 'storage',
   uploads: 'storage',
   blobs: 'storage',
   s3: 'storage',
+
+  // database
   postgres: 'database',
   mysql: 'database',
   db: 'database',
   sql: 'database',
+
+  // monitoring (absorbs audit-logging)
   'error tracking': 'monitoring',
   observability: 'monitoring',
   logging: 'monitoring',
   apm: 'monitoring',
+  'audit log': 'monitoring',
+  'audit trail': 'monitoring',
+  compliance: 'monitoring',
+  governance: 'monitoring',
+
+  // search
   'full-text search': 'search',
+
+  // push
   'push notifications': 'push',
   notifications: 'push',
+
+  // ai (absorbs ai-orchestration, ai-memory, document-processing)
   llm: 'ai',
   'language model': 'ai',
   gpt: 'ai',
   claude: 'ai',
-  'stock data': 'financial-data',
-  'market data': 'financial-data',
-  'stock api': 'financial-data',
-  stocks: 'financial-data',
-  'stock market': 'financial-data',
-  'financial api': 'financial-data',
-  finance: 'financial-data',
-  'prediction market': 'prediction-markets',
-  predictions: 'prediction-markets',
-  forecasting: 'prediction-markets',
-  polymarket: 'prediction-markets',
-  kalshi: 'prediction-markets',
-  'event contracts': 'prediction-markets',
-  brokerage: 'trading',
-  'stock trading': 'trading',
-  'trade execution': 'trading',
-  'order execution': 'trading',
-  broker: 'trading',
-  'buy stocks': 'trading',
-  'sell stocks': 'trading',
-  'crypto trading': 'trading',
-  // New categories
-  'env vars': 'secrets',
-  'secret management': 'secrets',
-  vault: 'secrets',
-  'rate limit': 'rate-limiting',
-  'rate limiter': 'rate-limiting',
-  throttling: 'rate-limiting',
+  'agent framework': 'ai',
+  'ai agents': 'ai',
+  langchain: 'ai',
+  'ai workflow': 'ai',
+  orchestration: 'ai',
+  'ai memory': 'ai',
+  'long-term memory': 'ai',
+  'context management': 'ai',
+  'document parsing': 'ai',
+  'document extraction': 'ai',
+  chunking: 'ai',
+  ocr: 'ai',
+  'pdf parsing': 'ai',
+
+  // finance (merges financial-data + trading)
+  'stock data': 'finance',
+  'market data': 'finance',
+  'stock api': 'finance',
+  stocks: 'finance',
+  'stock market': 'finance',
+  'financial api': 'finance',
+  finance: 'finance',
+  brokerage: 'finance',
+  'stock trading': 'finance',
+  'trade execution': 'finance',
+  'order execution': 'finance',
+  broker: 'finance',
+  'buy stocks': 'finance',
+  'sell stocks': 'finance',
+  'crypto trading': 'finance',
+
+  // maps
   geocoding: 'maps',
   mapping: 'maps',
   geolocation: 'maps',
-  'video streaming': 'video',
-  'video hosting': 'video',
-  'live streaming': 'video',
-  calendar: 'scheduling',
-  booking: 'scheduling',
-  appointments: 'scheduling',
+
+  // jobs
   'background jobs': 'jobs',
   'job queue': 'jobs',
   'task queue': 'jobs',
   workers: 'jobs',
   cron: 'jobs',
-  // AI infrastructure
-  'agent framework': 'ai-orchestration',
-  'ai agents': 'ai-orchestration',
-  langchain: 'ai-orchestration',
-  'ai workflow': 'ai-orchestration',
-  orchestration: 'ai-orchestration',
+
+  // vector-db
   'vector database': 'vector-db',
   'vector store': 'vector-db',
   embeddings: 'vector-db',
   pinecone: 'vector-db',
   rag: 'vector-db',
   'semantic search': 'vector-db',
-  'document parsing': 'document-processing',
-  'document extraction': 'document-processing',
-  chunking: 'document-processing',
-  ocr: 'document-processing',
-  'pdf parsing': 'document-processing',
-  'ai memory': 'ai-memory',
-  'long-term memory': 'ai-memory',
-  'context management': 'ai-memory',
-  // Connectors & infrastructure
-  'unified api': 'integrations',
-  'api integration': 'integrations',
-  crm: 'integrations',
-  hris: 'integrations',
-  'service connector': 'integrations',
-  webhook: 'webhooks',
-  'webhook delivery': 'webhooks',
-  'event delivery': 'webhooks',
-  'api gateway': 'api-gateway',
-  'api management': 'api-gateway',
-  'api proxy': 'api-gateway',
-  'audit log': 'audit-logging',
-  'audit trail': 'audit-logging',
-  compliance: 'audit-logging',
-  governance: 'audit-logging',
-  // AI generation
+
+  // ai-audio
   'text to speech': 'ai-audio',
   tts: 'ai-audio',
   'speech to text': 'ai-audio',
@@ -128,10 +123,14 @@ export const categoryAliases: Record<string, string> = {
   'voice synthesis': 'ai-audio',
   transcription: 'ai-audio',
   'music generation': 'ai-audio',
+
+  // ai-video
   'video generation': 'ai-video',
   'text to video': 'ai-video',
   'ai video': 'ai-video',
   'video ai': 'ai-video',
+
+  // ai-image
   'image generation': 'ai-image',
   'text to image': 'ai-image',
   'ai image': 'ai-image',
@@ -140,23 +139,30 @@ export const categoryAliases: Record<string, string> = {
   'stable diffusion': 'ai-image',
   dall_e: 'ai-image',
   midjourney: 'ai-image',
-  // Infrastructure additions
+
+  // feature-flags
   'feature flag': 'feature-flags',
   'feature flags': 'feature-flags',
   'feature toggle': 'feature-flags',
   'a/b testing': 'feature-flags',
+
+  // message-queue
   'message queue': 'message-queue',
   'message broker': 'message-queue',
   kafka: 'message-queue',
   rabbitmq: 'message-queue',
   pubsub: 'message-queue',
   'event streaming': 'message-queue',
-  cache: 'cache-kv',
-  redis: 'cache-kv',
-  memcached: 'cache-kv',
-  'key value': 'cache-kv',
-  kv: 'cache-kv',
-  'in memory': 'cache-kv',
+
+  // cache (renamed from cache-kv)
+  cache: 'cache',
+  redis: 'cache',
+  memcached: 'cache',
+  'key value': 'cache',
+  kv: 'cache',
+  'in memory': 'cache',
+
+  // realtime
   realtime: 'realtime',
   websocket: 'realtime',
   websockets: 'realtime',
@@ -164,4 +170,40 @@ export const categoryAliases: Record<string, string> = {
   sse: 'realtime',
   'live updates': 'realtime',
   presence: 'realtime',
+
+  // chat (new)
+  chat: 'chat',
+  'live chat': 'chat',
+  'chat api': 'chat',
+  'in-app messaging': 'chat',
+
+  // hosting (new)
+  hosting: 'hosting',
+  deployment: 'hosting',
+  paas: 'hosting',
+  'cloud hosting': 'hosting',
+
+  // cdn (new)
+  cdn: 'cdn',
+  'content delivery': 'cdn',
+  'edge network': 'cdn',
+
+  // cms (new)
+  cms: 'cms',
+  'content management': 'cms',
+  'headless cms': 'cms',
+
+  // media (new — absorbs video)
+  media: 'media',
+  'media processing': 'media',
+  'image processing': 'media',
+  'video streaming': 'media',
+  'video hosting': 'media',
+  'live streaming': 'media',
+
+  // web-search (new)
+  'web search': 'web-search',
+  'web retrieval': 'web-search',
+  serp: 'web-search',
+  'web scraping api': 'web-search',
 };

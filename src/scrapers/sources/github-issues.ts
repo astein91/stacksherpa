@@ -14,9 +14,9 @@ const GITHUB_API = 'https://api.github.com';
 // NOTE: IDs must match the database provider IDs
 export const providerRepos: Record<string, string[]> = {
   // AI/LLM (use DB IDs)
-  'openai-gpt4o': ['openai/openai-node', 'openai/openai-python'],
-  'anthropic-claude-sonnet': ['anthropics/anthropic-sdk-typescript', 'anthropics/anthropic-sdk-python'],
-  'google-gemini-flash': ['google-gemini/generative-ai-js', 'google-gemini/generative-ai-python'],
+  'openai': ['openai/openai-node', 'openai/openai-python'],
+  'anthropic': ['anthropics/anthropic-sdk-typescript', 'anthropics/anthropic-sdk-python'],
+  'google-ai': ['google-gemini/generative-ai-js', 'google-gemini/generative-ai-python'],
   'vercel-ai-sdk': ['vercel/ai'],
 
   // Email
