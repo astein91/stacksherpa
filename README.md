@@ -1,77 +1,55 @@
 # stacksherpa
 
-Intelligent API recommendation engine. When you need an external API, stacksherpa picks the best one for your stack — with pricing, known issues, compliance data, and real GitHub issue tracking.
+Intelligent API recommendation engine. 450+ providers across 28 categories — with pricing, known issues, compliance data, and live GitHub issue tracking.
 
-**450+ providers across 28 categories** &middot; **[Browse the catalog →](https://stacksherpa.vercel.app)**
+**[Browse the catalog →](https://stacksherpa.vercel.app)**
+
+## Quick start
+
+```bash
+# 1. Install the CLI
+npm install -g stacksherpa
+
+# 2. Install the Claude Code skill (Claude will auto-consult stacksherpa when you need an API)
+mkdir -p ~/.claude/skills/api-selection
+curl -sL https://raw.githubusercontent.com/astein91/stacksherpa/main/skills/api-selection/SKILL.md \
+  -o ~/.claude/skills/api-selection/SKILL.md
+
+# 3. Try it
+stacksherpa providers email --pretty
+```
+
+No API keys needed. The catalog is a shared read-only database.
 
 ---
 
-## Browse
+## Browse the catalog
 
-Visit **[stacksherpa.vercel.app](https://stacksherpa.vercel.app)** to explore the full provider catalog — filter by category, compare providers, see pricing and known issues.
-
-## Install the CLI
-
-```bash
-npm install -g stacksherpa
-```
-
-Or run without installing:
-
-```bash
-npx stacksherpa providers email --pretty
-```
-
-**No API keys needed.** The provider catalog is hosted on a shared read-only database.
+Visit **[stacksherpa.vercel.app](https://stacksherpa.vercel.app)** to explore providers, compare options, and see pricing and known issues — no install required.
 
 ## CLI usage
 
 ```bash
-# Browse categories
-stacksherpa categories --pretty
+stacksherpa categories --pretty                # List all 28 categories
+stacksherpa providers email --pretty            # All email providers + your profile
+stacksherpa providers database --pretty         # All database providers
+stacksherpa provider stripe --pretty            # Deep-dive on one provider
 
-# See all providers in a category (with pricing, issues, compliance)
-stacksherpa providers email --pretty
-stacksherpa providers database --pretty
-stacksherpa providers ai --pretty
-
-# Deep-dive on a specific provider
-stacksherpa provider stripe --pretty
-stacksherpa provider resend --pretty
-
-# View/update your project profile
-stacksherpa profile --pretty
-stacksherpa profile --set '{"project.name": "my-app", "project.scale": "startup"}'
+stacksherpa profile --pretty                    # View your project profile
+stacksherpa profile --set '{"project.scale": "startup"}'
 stacksherpa profile --set '{"constraints.compliance": ["SOC2"]}'
-stacksherpa profile --append '{"preferences.avoidProviders": "sendgrid"}'
 
-# Record what you chose (improves future recommendations)
 stacksherpa decide --api Resend --category email --outcome positive
-stacksherpa decide --api SendGrid --category email --outcome negative --notes "TypeScript types broken"
-
-# Report how the integration went
 stacksherpa report --id <decision-id> --success
-stacksherpa report --id <decision-id> --failure --stage build --notes "SDK didn't support ESM"
 
-# Manage project registry
 stacksherpa projects list --pretty
-stacksherpa projects prune
 ```
 
 All commands output JSON. Add `--pretty` for human-readable formatting.
 
-## Claude Code integration
+## Claude Code skill
 
-Install the skill so Claude automatically consults stacksherpa whenever you need an API:
-
-```bash
-# Install globally (works in all your projects)
-mkdir -p ~/.claude/skills/api-selection
-curl -sL https://raw.githubusercontent.com/astein91/stacksherpa/main/skills/api-selection/SKILL.md \
-  -o ~/.claude/skills/api-selection/SKILL.md
-```
-
-Or install per-project:
+The quick start installs the skill globally (`~/.claude/skills/`). You can also install per-project:
 
 ```bash
 mkdir -p .claude/skills/api-selection
@@ -79,9 +57,9 @@ curl -sL https://raw.githubusercontent.com/astein91/stacksherpa/main/skills/api-
   -o .claude/skills/api-selection/SKILL.md
 ```
 
-That's it. Claude will now silently run `stacksherpa providers <category>` before suggesting any API integration. No slash command needed — the skill triggers automatically.
+Once installed, Claude will silently run `stacksherpa providers <category>` before suggesting any API integration. No slash command needed — the skill triggers automatically.
 
-**Alternative:** If you prefer not to install the skill, just add this to your project's `CLAUDE.md`:
+**Alternative — no skill, just instructions:** Add this to your project's `CLAUDE.md`:
 
 ```markdown
 ## API Selection
