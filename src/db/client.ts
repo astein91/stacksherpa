@@ -12,7 +12,8 @@ import type { KnownProvider, KnownIssue, PricingModel } from '../types.js';
 
 // Turso connection — defaults to shared read-only catalog
 const TURSO_URL = process.env.TURSO_DATABASE_URL ?? 'libsql://api-broker-astein91.aws-us-west-2.turso.io';
-const TURSO_READ_TOKEN = process.env.TURSO_AUTH_TOKEN ?? '';
+// Read-only token for the shared catalog (safe to embed — grants SELECT only)
+const TURSO_READ_TOKEN = process.env.TURSO_AUTH_TOKEN ?? 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicm8iLCJpYXQiOjE3NzA5MTg3OTUsImlkIjoiYjA4YmZkNTUtZjhhNi00ODU5LThjNzMtYjg4NzIzMmI4YmYyIiwicmlkIjoiMWJjN2NhMTgtMDU1OC00NjI2LWJjY2YtOGVmMWIwZjQ1ZDAxIn0.aZ4gR9f0I9Qq8T_tkQp-uXwL-4LzUPGaGCDATirOFBBu9kHmuFs5cfXXJ162RzfX2Nrsn-HEAx_H8-uSSfiKBA';
 const TURSO_WRITE_TOKEN = process.env.TURSO_WRITE_TOKEN;
 
 let client: Client | null = null;

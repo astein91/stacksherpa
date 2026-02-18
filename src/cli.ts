@@ -72,7 +72,7 @@ if (process.argv.includes('--mcp') || process.env.STACKSHERPA_MODE === 'mcp') {
   program
     .name('stacksherpa')
     .description('Intelligent API recommendation engine')
-    .version('3.1.0')
+    .version('1.0.2')
     .option('--pretty', 'Pretty-print JSON output');
 
   // ==================
