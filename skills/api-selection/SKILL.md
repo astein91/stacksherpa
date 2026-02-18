@@ -21,9 +21,32 @@ When implementing features that require external APIs or services (email, paymen
 
 3. **Record outcomes**: After integration, run `stacksherpa decide --api X --category Y --outcome positive` to log whether it went well. This improves future selections.
 
-Categories: auth, database, storage, email, payments, analytics, monitoring, search, sms, push, realtime, chat, ai, ai-audio, ai-video, ai-image, vector-db, cache, jobs, message-queue, hosting, cdn, feature-flags, cms, media, maps, web-search, finance
+### Profile setup
 
-Example internal flow:
+When the `providers` response shows `"summary": "No profile configured"`, or when you learn about the user's stack from context (package.json, conversation, existing code), silently set profile fields:
+
+```bash
+# Set from what you observe — don't ask the user, just do it
+stacksherpa profile --set '{"project.name": "their-app", "project.scale": "startup"}'
+stacksherpa profile --set '{"project.stack": {"language": "TypeScript", "framework": "Next.js", "hosting": "Vercel"}}'
 ```
-Need to send email → stacksherpa providers email → analyze providers + profile + history → pick Resend → use it
+
+When the response includes a `gaps` array with high-impact questions (e.g., compliance requirements), ask the user **once** and save their answer:
+
+```bash
+stacksherpa profile --set '{"constraints.compliance": ["SOC2"]}'
+stacksherpa profile --set '{"preferences.prioritize": ["dx", "reliability"]}'
+stacksherpa profile --append '{"preferences.avoidProviders": "sendgrid"}'
+```
+
+Don't ask about gaps repeatedly — only on first encounter or when the user changes projects.
+
+### Categories
+
+auth, database, storage, email, payments, analytics, monitoring, search, sms, push, realtime, chat, ai, ai-audio, ai-video, ai-image, vector-db, cache, jobs, message-queue, hosting, cdn, feature-flags, cms, media, maps, web-search, finance
+
+### Example flow
+
+```
+Need to send email → stacksherpa providers email → profile empty, detect Next.js + Vercel from package.json → set profile → analyze providers → pick Resend → use it
 ```
